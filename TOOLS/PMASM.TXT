@@ -1,0 +1,80 @@
+PREPROCESSOR OF MACRO ASSEMBLER
+
+-------
+Build
+-------
+
+MASM PMASM;
+LINK PMASM;
+EXE2BIN PMASM PMASM.COM
+
+-------
+Command
+-------
+
+PMASM input-filename > output-filename
+
+-------
+Syntax
+-------
+
+== PROC ==
+	defines a procedure.
+Input:
+	{(PROC(NAME))
+	CODE
+	}
+Output:
+	NAME PROC NEAR
+	CODE
+	NAME ENDP
+
+=== ARG ===
+	defines cdecl function arguments.
+Input:
+	{(ARG(ARG1,ARG2,...)
+	CODE %ARG1%
+	}
+Output:
+	PUSH BP
+	MOV BP,SP
+	CODE [BP+00004H]
+	POP BP
+
+=== LOCAL ===
+	defines local variables.
+Input:
+	{(LOCAL(LOCAL1,LOCAL2,...)
+	CODE %LOCAL1%
+	}
+Output:
+	SUB SP,00004H ;2*number of local variables
+	CODE [BP-00002H]
+	MOV SP,BP
+
+=== Local Labels ===
+	Local labels are only usable within a block.
+Input:
+	{((LABEL1,LABEL2,...)
+	%LABEL1%:
+	CODE %LABEL1%
+	CODE %LABEL2%
+	%LABEL2%:
+	}
+Output:
+	L0000:
+	CODE L0000
+	CODE L0001
+	L0001:
+
+=== Predefined Local Labels ===
+	for frequently appearing local labels.
+Input:
+	{(NAME(LABEL1,LABEL2,...))}
+	{(NAME)
+	%LABEL1%:
+	CODE %LABEL1%
+	}
+Output:
+	L0000:
+	CODE L0000

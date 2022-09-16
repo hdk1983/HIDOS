@@ -1,0 +1,3 @@
+[submodule "MS-DOS"]
+	path = MS-DOS
+	url = https://github.com/hdk1983/MS-DOS.git

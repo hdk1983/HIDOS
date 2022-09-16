@@ -1,0 +1,26 @@
+UNUSED DEFINITION REMOVER
+
+This tool is a preprocessor that reads a macro assembler code and
+included files, finds unused definitions of EQU (=) and STRUC, and
+removes them by inserting ';UNUSED;' (comment) at the start of the
+line.  This tool is useful to avoid out of memory error of the
+assembler if header files contain a lot of definitions used rarely
+like error codes or structures,
+
+This tool does not remove short symbols (in case of EQU or = name
+length is less than 8 characters) to avoid broken macros.
+
+-------
+Build
+-------
+
+PMASM REMOVER.PMA > REMOVER.ASM
+MASM REMOVER;
+LINK REMOVER;
+EXE2BIN REMOVER REMOVER.COM
+
+-------
+Command
+-------
+
+REMOVER input-filename > output-filename
