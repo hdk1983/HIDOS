@@ -33,7 +33,7 @@ utilities.
 | MORE.COM          | OK                  | OK                         |
 | MSDOS.SYS         | Need STDIO          |                            |
 | PROFIL.COM        | OK                  |                            |
-| PRINT.COM         | OK                  | Not for PCs                |
+| PRINT.COM         | OK                  | OK (resident on MS-DOS)    |
 | RECOVER.COM       | OK                  |                            |
 | SORT.EXE          | OK                  | OK                         |
 | SYS.COM           | OK                  | OK (on MS-DOS)             |
