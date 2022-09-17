@@ -20,7 +20,7 @@ utilities.
 | File Name         | Build               | Run                        |
 | ----------------- | ------------------- | -------------------------- |
 | CHKDSK.COM        | OK                  | OK (on MS-DOS)             |
-| COMMAND.COM       | OK                  |                            |
+| COMMAND.COM       | OK                  | OK (on MS-DOS)             |
 | DEBUG.COM         | OK                  | OK                         |
 | DISKCOPY.COM      | OK                  | OK (on MS-DOS)             |
 | EDLIN.COM         | OK                  | OK                         |
