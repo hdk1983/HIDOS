@@ -35,7 +35,7 @@ utilities.
 | MSDOS.SYS         | OK                  | OK                         |
 | PROFIL.COM        | OK                  |                            |
 | PRINT.COM         | OK                  | OK (resident on MS-DOS)    |
-| RECOVER.COM       | OK                  |                            |
+| RECOVER.COM       | OK                  | OK (on MS-DOS)             |
 | SORT.EXE          | OK                  | OK                         |
 | SYS.COM           | OK                  | OK (on MS-DOS)             |
 
