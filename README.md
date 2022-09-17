@@ -7,6 +7,7 @@ utilities.
 
 - MS-DOS/ is a submodule repository of the MS-DOS source code with some fixes.
 - TOOLS/ contains two preprocessor tools for building MS-DOS with MASM Version 1.10.
+- ADDITION/ contains additional source files for building MS-DOS.
 - BUILD/ contains two batch files and symbolic links to the source code and utilities (MASM, LINK and EXE2BIN).
 
 ## How to Build
@@ -31,7 +32,7 @@ utilities.
 | HRDDRV.SYS        | OK                  | Not for PCs                |
 | IO.SYS            | Need some symbols   |                            |
 | MORE.COM          | OK                  | OK                         |
-| MSDOS.SYS         | Need STDIO          |                            |
+| MSDOS.SYS         | OK                  | OK                         |
 | PROFIL.COM        | OK                  |                            |
 | PRINT.COM         | OK                  | OK (resident on MS-DOS)    |
 | RECOVER.COM       | OK                  |                            |
