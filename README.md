@@ -27,7 +27,7 @@ utilities.
 | EXE2BIN.EXE       | OK                  | OK                         |
 | FC.EXE            | OK                  | OK                         |
 | FIND.EXE          | OK                  | OK                         |
-| FORMAT.COM        | OK                  | Not for PCs                |
+| FORMAT.COM        | OK                  | OK                         |
 | HRDDRV.SYS        | OK                  | Not for PCs                |
 | IO.SYS            | Need some symbols   |                            |
 | MORE.COM          | OK                  | OK                         |
