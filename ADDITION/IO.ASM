@@ -49,6 +49,8 @@ entry	BUFOUT
 ; - "Display "^C"" (CTRLC.ASM)
 	CMP	AL,' '
 	JNB	OUT
+	CMP	AL,c_HT
+	JE	OUT
 	PUSH	AX
 	MOV	AL,'^'
 	CALL	OUT
@@ -66,7 +68,7 @@ entry	OUT
 
 entry	TAB
 ; called by PUTNEW in STRIN.ASM.
-	MOV	AL,9
+	MOV	AL,c_HT
 	JMP	OUT
 
 ; Use the same way as $RAW_CON_INPUT and RAWNORM.

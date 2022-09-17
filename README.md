@@ -38,3 +38,10 @@ utilities.
 | RECOVER.COM       | OK                  |                            |
 | SORT.EXE          | OK                  | OK                         |
 | SYS.COM           | OK                  | OK (on MS-DOS)             |
+
+## Bugs
+
+### MSDOS.SYS
+
+String input routine in STRIN.ASM refers `CARPOS` variable but it is not set.
+Because of this, typing backspace may delete incorrect number of spaces for a tab.
