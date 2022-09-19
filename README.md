@@ -43,5 +43,6 @@ utilities.
 
 ### MSDOS.SYS
 
-String input routine in STRIN.ASM refers `CARPOS` variable but it is not set.
-Because of this, typing backspace may delete incorrect number of spaces for a tab.
+The `CARPOS` variable is only updated in IO.ASM.
+Therefore the variable is not properly updated if applications use stdout or INT 29H.
+DEBUG.COM and COMMAND.COM seem OK with this implementation.
