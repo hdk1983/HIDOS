@@ -1526,16 +1526,10 @@ SEGMOVE:
 SEGOK:
 	;; Scan drives
 	PUSH	DX
-	;; Test for high density flag of JX
-	MOV	ES:[DRVFLG],40H
-	TEST	DL,40H
-	JNE	DRVSCN
-	OR	DL,40H
-	MOV	AH,0
-	INT	13H
-	JNC	DRVSCN
-	XOR	DL,40H
-	MOV	ES:[DRVFLG],0
+	;; Save high density flag of JX
+	MOV	AL,40H
+	AND	AL,DL
+	MOV	ES:[DRVFLG],AL
 DRVSCN:
 	;; Find maximum drive number
 	INC	DL
