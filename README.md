@@ -34,6 +34,9 @@ A>DEBUG PC_BOOT.BIN
 A>
 ```
 
+Note: this contains BIOS Parameter Block (BPB) for 720KiB format.
+To use different format of a floppy disk, modify the `PC_BOOT.ASM` or copy the first 3 bytes (JMP) and from byte offset 3EH.
+
 Then rename `PC_IO.SYS` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to the disk.
 
 The boot code is probably not compatible with other DOS.
