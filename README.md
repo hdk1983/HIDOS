@@ -35,7 +35,15 @@ A>
 ```
 
 Note: this contains BIOS Parameter Block (BPB) for 720KiB format.
-To use different format of a floppy disk, modify the `PC_BOOT.ASM` or copy the first 3 bytes (JMP) and from byte offset 3EH.
+To use different format of a floppy disk, modify the `PC_BOOT.ASM` and build, or copy the first 3 bytes (JMP) and from byte offset 3EH, as follows:
+
+```
+A>DEBUG PC_BOOT.BIN
+-L 800 0 0 1
+-M 803 83D 103
+-W 100 0 0 1
+-Q
+```
 
 Then rename `PC_IO.SYS` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to the disk.
 
@@ -62,7 +70,7 @@ It loads `IO.SYS` only, then `IO.SYS` loads `MSDOS.SYS`.
 | PROFIL.COM        | OK                  |                            |
 | PRINT.COM         | OK                  | OK (resident on MS-DOS)    |
 | RECOVER.COM       | OK                  | OK (on MS-DOS)             |
-| SORT.EXE          | OK                  | OK                         |
+| SORT.EXE          | OK                  | See below                  |
 | SYS.COM           | OK                  | OK (on MS-DOS)             |
 
 ## Bugs
@@ -74,3 +82,18 @@ Therefore the variable is not properly updated if applications use stdout or INT
 DEBUG.COM and COMMAND.COM seem OK with this implementation.
 
 Unlike other DOS, if only one floppy drive is found, B: does not exist.
+
+### COMMAND.COM
+
+`CLS` command prints ANSI escape sequence (`ESC [ 2 J`).
+The screen is not cleared because currently ANSI switch is not enabled in IO.SYS.
+IBM version seems calling ROM BIOS directly from COMMAND.COM.
+
+`DIR /P` command pauses per 23 lines, defined as LINPERPAG in COMEQU.ASM.
+It is not good if the screen has less than 24 lines, like JX Japanese kihon-mode.
+
+### SORT.EXE
+
+Something goes wrong.
+It shows "SORT: Insufficient memory" on DOS 2.x.
+It works on FreeDOS but after completion the system shows "PANIC: MCB chain corrupted".
