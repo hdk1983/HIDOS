@@ -1221,10 +1221,10 @@ DISKBIOS_RETRY:
 	PUSH	DX
 	MOV	BX,DI
 	INT	13H
+	POP	DX
 	JNC	DISKBIOS_RET
 	INC	BP		; Carry flag is kept
 	JNS	DISKBIOS_RET
-	POP	DX
 	PUSH	DX
 	MOV	AH,0
 	INT	13H
@@ -1235,8 +1235,7 @@ DISKBIOS_RETRY:
 	XOR	BP,BP
 	JMP	DISKBIOS_RETRY
 DISKBIOS_RET:
-	POP	BP
-	POP	BP
+	POP	CX
 	POP	BP
 	POP	BP
 	RET
@@ -1409,52 +1408,9 @@ DRVDMA	LABEL	BYTE		; 0A9H TEST AX,immediate if no DMA
 	CALL	DISKRW_GETBSEC
 	CMP	AX,BX
 	JB	DISKRW_BOK
+	TEST	BX,BX
+	JE	DISKRW_BHIT
 	MOV	AX,BX
-	TEST	AX,AX
-	JNE	DISKRW_BOK
-	;; Read one sector to temporary memory and copy.
-	;; Normally this module is loaded into segment 200H, segment
-	;; 1E0H for 512 byte sector is available for temporary use.
-	MOV	AX,[SI.SECSIZE]
-	PUSH	DS
-	PUSH	ES
-	PUSH	DI
-	PUSH	CX
-	MOV	CL,4
-	SHR	AX,CL
-	POP	CX
-	MOV	BX,CS
-	SUB	BX,AX
-	MOV	ES,BX
-	XOR	DI,DI
-	MOV	AX,1
-	PUSH	AX
-	MOV	AH,[BP+8]	; Command
-	CALL	DISKBIOS
-	POP	DX
-	POP	DI
-	JNC	DISKRW_BROK
-	POP	ES
-	POP	DS
-	JMP	SHORT DISKRW_ERR
-DISKRW_BROK:
-	MOV	AX,[SI.SECSIZE]
-	SHR	AX,1
-	PUSH	ES
-	POP	DS
-	POP	ES
-	PUSH	SI
-	PUSH	DI
-	PUSH	CX
-	XOR	SI,SI
-	CLD
-	XCHG	AX,CX
-	REP	MOVSW
-	POP	CX
-	POP	DI
-	POP	SI
-	POP	DS
-	JMP	SHORT DISKRW_BDONE
 DISKRW_BOK:
 	PUSH	AX
 	MOV	AH,[BP+8]	; Command
@@ -1475,6 +1431,85 @@ DISKRW_BDONE:
 DISKRW_ERR:
 	POP	BP
 	RET
+DISKRW_BHIT:
+	LEA	SP,[BP-10]
+	;; Normally this module is loaded into segment 200H, segment
+	;; 1E0H for 512 byte sector is available for temporary use.
+	PUSH	AX
+	MOV	AX,[SI.SECSIZE]
+	PUSH	AX
+	PUSH	CX
+	;; [BP-10]=CX
+	MOV	[BP-10],CX
+	;; [BP-8]=ES:DI
+	MOV	[BP-8],DI
+	MOV	[BP-6],ES
+	;; [BP-4]=0
+	MOV	WORD PTR [BP-4],0
+	;; [BP-2]=CS-SECSIZE/16
+	MOV	CL,4
+	SHR	AX,CL
+	MOV	BX,CS
+	SUB	BX,AX
+	MOV	[BP-2],BX
+	POP	CX
+	POP	BX
+	POP	AX
+	ASSUME	DS:NOTHING
+	;; If number of sectors is more than 1, read/write the next
+	;; part first to reduce time of waiting for a sector.
+	PUSH	AX
+	PUSH	SI
+	DEC	AX
+	JE	DISKRW_BHIT1
+	INC	CX		; Next sector
+	ADD	DI,BX		; Next offset
+	CALL	DISKRW_BHIT_CALL
+	JNC	DISKRW_BHIT1
+DISKRW_BHIT_DONE:
+	LES	DI,DWORD PTR [BP-8]
+	MOV	CX,[BP-10]
+	PUSH	CS
+	POP	DS
+	POP	SI
+	POP	DX
+	MOV	SP,BP
+	JC	DISKRW_ERR
+	JMP	DISKRW_BDONE
+DISKRW_BHIT1:
+	SHR	BX,1
+	;; Read one sector to temporary memory and copy or
+	;; copy one sector to temporary memory and write.
+	CMP	BYTE PTR [BP+8],2 ; Read
+	JE	DISKRW_BHIT2
+	LDS	SI,DWORD PTR [BP-8]
+	LES	DI,DWORD PTR [BP-4]
+	MOV	CX,BX
+	CLD
+	REP	MOVSW
+DISKRW_BHIT2:
+	LES	DI,DWORD PTR [BP-4]
+	MOV	CX,[BP-10]
+	MOV	AL,1
+	CALL	DISKRW_BHIT_CALL
+	JC	DISKRW_BHIT_DONE
+	CMP	BYTE PTR [BP+8],2 ; Read
+	JNE	DISKRW_BHIT3
+	LDS	SI,DWORD PTR [BP-4]
+	LES	DI,DWORD PTR [BP-8]
+	MOV	CX,BX
+	CLD
+	REP	MOVSW
+DISKRW_BHIT3:
+	CLC
+	JMP	DISKRW_BHIT_DONE
+DISKRW_BHIT_CALL:
+	PUSH	BX
+	MOV	AH,[BP+8]	; Command
+	CALL	DISKBIOS
+	POP	BX
+	RET
+	ASSUME	DS:CODE
 
 DISKRW_GETBSEC PROC NEAR
 	PUSH	AX
