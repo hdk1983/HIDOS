@@ -1,0 +1,150 @@
+HIDOS VIRTUAL MACHINE
+
+This is a very simple virtual machine monitor for GNU/Linux (or maybe
+other Unix-like operating systems).  Two types of monitor programs
+are implemented:
+
+- "hidosvm" uses an external library.  It might work on other
+  Unix-like systems.  libx86emu: https://github.com/wfeldt/libx86emu -
+  "hidoskvm" uses Linux KVM.  Faster than "hidosvm" but for x86 Linux
+  only.
+
+This virtual machine is NOT compatible with PC.  On this virtual
+machine, PC_IO.SYS does not work.  Only VM_IO.SYS works.
+
+-------
+Build
+-------
+
+  make hidosvm
+  make hidoskvm
+
+-------
+Command
+-------
+
+Start a virtual machine on a terminal emulator like following:
+
+  ./hidosvm disk1 disk2 ...
+
+or for Linux KVM version:
+
+  ./hidoskvm disk1 disk2 ...
+
+The arguments are file names of disk image.  Each image must be
+formatted as **FAT12** without master boot record or partition tables.
+Floppy disk images are usable.  If bigger image is needed, see below.
+
+To quit the machine, type Enter (^M), '~', and '.', like the OpenSSH
+client.  HLT instruction also quits the machine because it does not
+generate any interrupts at all.
+
+To create a big disk image (64MiB):
+
+  dd if=/dev/zero of=disk1 bs=4096 count=16384
+  /sbin/mkfs.fat -S 4096 -F 12 disk1
+
+Note that the number of sectors must be less than 65536.  The reason
+is that sector number in DOS 2.0 is 16-bit integer.  4096-byte sector
+is usable.  Number of cylinders, heads per cylinder, and sectors per
+track are not used.
+
+To copy system to the image using mtools:
+
+  mcopy -i disk1 ../BUILD/BIN/* ::
+
+This virtual machine loads VM_IO.SYS (or IO.SYS) and MSDOS.SYS
+directly from the FAT12 file system in the first disk image.  No boot
+code installation is needed.
+
+-------
+Specs
+-------
+
+Memory address space:
+
+  00000H-FEFFFH  Random access memory (RAM)
+  FF000H-FFFEFH  RAM*
+  FFFF0H-FFFFFH  Read only memory (ROM)
+  * ROM for hidoskvm
+
+Hardware interrupts:
+
+  Nothing
+
+Software interrupts:
+
+  INT 86H  initiates device I/O.
+           Input:  AX = segment address for the I/O structure
+
+I/O ports:
+
+  80H  Trigger system loader.  Byte access, write only.
+       This port can be used by the ROM code only.
+
+  86H  Device I/O.  Word access, write only.
+       Writing to this port initiates a device I/O.
+       The value is segment address for the I/O structure.
+       The INT 86H uses this port.
+
+Device I/O structure:
+It starts from offset 0 of a segment.
+
+  +00H  IODEV  word   Device name (in little endian order)
+  +02H  IOIDX  word   Device index
+  +04H  IOCMD  word   Command (in little endian order)
+  +06H  IOBUF  dword  Buffer
+  +0AH  IOADR  dword  Address
+  +0EH  IOSIZ  dword  Length
+
+Device names and commands:
+
+  IODEV 'IN' for initialization
+  IOIDX must be 0.
+    IOCMD 'DI' returns number of disks to IOBUF (word).
+    IOCMD 'RA' returns RAM size to IOBUF (dword).
+    IOCMD 'DO' returns MSDOS.SYS loaded segment address to IOBUF
+               (word).
+
+  IODEV 'DI' for disk I/O
+  IOIDX is the drive number (0 for 1st argument, 1 for 2nd, ...).
+    IOCMD 'RD' copys IOSIZ (dword) bytes from the disk byte offset
+               IOBUF (dword) to memory address IOADR (dword).
+    IOCMD 'WR' copys IOSIZ (dword) bytes from memory address IOADR
+               (dword) to the disk byte offset IOBUF (dword).
+
+  IODEV 'CO' for console I/O
+  IOIDX must be 0.
+    IOCMD 'W1' prints a byte in IOBUF (byte).
+    IOCMD 'WR' prints IOSIZ (dword) bytes from memory address IOADR
+               (dword).
+    IOCMD 'RP' returns one input byte to low 8 bits of IOBUF (word).
+               Non-destructive.  High 8 bits of IOBUF (word) contains
+               1 if there is an input, 0 is not.
+    IOCMD 'R1' returns the byte as 'RP'.  Destructive.
+    IOCMD 'RW' Wait for the next input with 10ms timeout.
+
+  IODEV 'AU' for AUX I/O.  Currently dummy implementation.
+  IOIDX must be 0.
+    IOCMD 'W1'
+    IOCMD 'WR'
+    IOCMD 'RP'
+    IOCMD 'R1'
+
+  IODEV 'CL' for clock I/O.
+  IOIDX must be 0.
+  IOSIZ (dword) must be 12.
+  Memory address IOADR (dword) refers the following structure format:
+  +00H  Date          dword  Number of days since 1970-01-01
+  +04H  Seconds       dword  Seconds of a day (0-86399)
+  +08H  Microseconds  dword  Microseconds  (0-999999)
+    IOCMD 'RD' gets the current localtime clock.
+    IOCMD 'WR' sets the current localtime clock.  Applied for the
+               running virtual machine only.
+
+  IODEV 'PR' for printer I/O.  Currently dummy implementation.
+  IOIDX must be 0.
+    IOCMD 'W1'
+    IOCMD 'WR'
+    IOCMD 'RP'
+    IOCMD 'R1'

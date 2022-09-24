@@ -9,6 +9,7 @@ utilities.
 - TOOLS/ contains two preprocessor tools for building MS-DOS with MASM Version 1.10.
 - ADDITION/ contains additional source files for building MS-DOS.
 - BUILD/ contains two batch files, input files for EXE2BIN, and symbolic links to the source code and utilities (MASM, LINK and EXE2BIN).
+- hidosvm/ contains a simple virtual machine for running VM_IO.SYS.
 
 ## How to Build
 
@@ -16,7 +17,7 @@ utilities.
 2. Copy files in the BUILD/ directory to a file system accessible from the DOS.
 3. Change current working directory to the BUILD/ directory and run M.BAT on the DOS.  Binaries will be stored to BUILD/BIN/ directory.
 
-## Boot
+## Boot on PC
 
 ### Starting From Existing DOS (for Debugging)
 
@@ -49,6 +50,15 @@ Then rename `PC_IO.SYS` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND
 
 The boot code is probably not compatible with other DOS.
 It loads `IO.SYS` only, then `IO.SYS` loads `MSDOS.SYS`.
+
+## Boot on a HIDOS virtual machine
+
+The `VM_IO.SYS` is for the HIDOS virtual machine.
+Copy `VM_IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to a disk image.
+Then start hidosvm/hidosvm command with the disk image file name.
+
+The HIDOS virtual machine is very simple architecture and NOT compatible with PC.
+See hidosvm/hidosvm.txt for details.
 
 ## Current Status
 
