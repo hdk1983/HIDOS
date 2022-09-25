@@ -5,8 +5,8 @@ other Unix-like operating systems).  Two types of monitor programs
 are implemented:
 
 - "hidosvm" uses an external library.  It might work on other
-  Unix-like systems.  libx86emu: https://github.com/wfeldt/libx86emu -
-  "hidoskvm" uses Linux KVM.  Faster than "hidosvm" but for x86 Linux
+  Unix-like systems.  libx86emu: https://github.com/wfeldt/libx86emu
+- "hidoskvm" uses Linux KVM.  Faster than "hidosvm" but for x86 Linux
   only.
 
 This virtual machine is NOT compatible with PC.  On this virtual
