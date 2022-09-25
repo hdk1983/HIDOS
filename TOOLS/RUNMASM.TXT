@@ -1,0 +1,42 @@
+RUN MASM.EXE
+
+MASM.EXE Version 1.10 in the MS-DOS source tree looks buggy.
+Depending on size of free memory, it produces unexpected out of memory
+error, even if there are enough free memory.  The reason might be that
+there were smaller memory than current computers when MASM 1.10 was
+made.
+
+This tool runs MASM.EXE while some memory allocated to avoid the
+issue.
+
+Note that the RUNMASM file does not have LF at end of lines.  It has
+CR only to support DOSBox.
+
+-------
+Build
+-------
+
+DEBUG RUNMASM.COM < RUNMASM
+
+-------
+Command
+-------
+
+RUNMASM same-as-masm-command-line
+
+------------
+Pseudo Code
+------------
+
+Since the RUNMASM file is input for DEBUG command, it does not have
+any comments.  The following is simplified pseudo code for
+understanding what it does:
+
+  set_stack_pointer(mysegment,0x1000);
+  setblock(mysegment,0x1000);
+  tmp=alloc(0x2000);
+  alloc(number_of_largest_block());
+  dealloc(tmp);
+  exec("MASM.EXE",argv);
+  set_stack_pointer(mysegment,0x1000);
+  exit(0);

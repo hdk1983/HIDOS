@@ -1,21 +1,27 @@
 # HIDOS
 
-Tools and scripts for building MS-DOS with MASM, LINK and EXE2BIN
-utilities.
+Tools and scripts for building MS-DOS with DEBUG, MASM, LINK and EXE2BIN utilities.
 
 ## Files
 
 - MS-DOS/ is a submodule repository of the MS-DOS source code with some fixes.
-- TOOLS/ contains two preprocessor tools for building MS-DOS with MASM Version 1.10.
+- TOOLS/ contains two preprocessor tools and MASM wrappers for building MS-DOS with MASM Version 1.10.
 - ADDITION/ contains additional source files for building MS-DOS.
-- BUILD/ contains two batch files, input files for EXE2BIN, and symbolic links to the source code and utilities (MASM, LINK and EXE2BIN).
+- BUILD/ contains a batch file, input files for EXE2BIN, and symbolic links to the source code and utilities (DEBUG, MASM, LINK and EXE2BIN).
 - hidosvm/ contains a simple virtual machine for running VM_IO.SYS.
 
 ## How to Build
 
-1. Prepare DOS environment.  (FreeDOS is usable.  DOSBox might not support CALL in batch files.)
+1. Prepare DOS environment.  (MS-DOS, FreeDOS and DOSBox are usable.)
 2. Copy files in the BUILD/ directory to a file system accessible from the DOS.
 3. Change current working directory to the BUILD/ directory and run M.BAT on the DOS.  Binaries will be stored to BUILD/BIN/ directory.
+
+## Build on MS-DOS 2.11
+
+If the MS-DOS has been built successfully, you can build MS-DOS on itself.
+Disk space more than a floppy disk is needed, but current `PC_IO.SYS` does not support hard drives.
+Using the HIDOS virtual machine is easy.
+Especially, the hidoskvm is fast.
 
 ## Boot on PC
 
@@ -55,7 +61,7 @@ It loads `IO.SYS` only, then `IO.SYS` loads `MSDOS.SYS`.
 
 The `VM_IO.SYS` is for the HIDOS virtual machine.
 Copy `VM_IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to a disk image.
-Then start hidosvm/hidosvm command with the disk image file name.
+Then start hidosvm/hidosvm or hidosvm/hidoskvm command with the disk image file name.
 
 The HIDOS virtual machine is very simple architecture and NOT compatible with PC.
 See hidosvm/hidosvm.txt for details.

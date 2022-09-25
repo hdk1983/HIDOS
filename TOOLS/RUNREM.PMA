@@ -1,0 +1,231 @@
+; Copyright 2022 Hideki EIRAKU <hdk_2@users.sourceforge.net>
+;
+; Permission is hereby granted, free of charge, to any person obtaining
+; a copy of this software and associated documentation files (the
+; "Software"), to deal in the Software without restriction, including
+; without limitation the rights to use, copy, modify, merge, publish,
+; distribute, sublicense, and/or sell copies of the Software, and to
+; permit persons to whom the Software is furnished to do so, subject to
+; the following conditions:
+;
+; The above copyright notice and this permission notice shall be
+; included in all copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+; LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+; OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+; WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+{(IF(THEN,ELSE,ENDIF))}
+{(WHILE(LOOP,DO,DONE))}
+
+ERREXIT	MACRO	MSG
+	LOCAL	NOERR
+	JNC	NOERR
+	MOV	DX,OFFSET MSG
+	MOV	AH,9		; String output
+	INT	21H
+	MOV	AX,4C01H	; Exit
+	INT	21H
+NOERR:
+ENDM
+
+;;; Alignment macro
+ALI	MACRO	A
+	LOCAL	D
+D	EQU	$-OFF0-1
+	ORG	$+((D OR (A-1))-D)
+ENDM
+
+A	SEGMENT
+	ASSUME	CS:A,DS:A,ES:A,SS:A
+
+OFF0	LABEL	BYTE
+
+	ORG	80H
+ARG	LABEL	BYTE
+
+	ORG	0C0H
+ARGFOREXEC	LABEL	BYTE
+
+	ORG	100H
+START:
+	MOV	SP,OFFSET STACK
+	MOV	BX,(OFFSET STACK-OFFSET OFF0)/16
+	MOV	AH,4AH		; Setblock
+	INT	21H
+	ERREXIT	ERR_SETBLOCK
+	CLD
+	;; Create command line
+	MOV	SI,OFFSET ARG+2
+	MOV	DI,OFFSET ARGFOREXEC+1
+	MOV	AL,' '
+	STOSB
+	{(WHILE)
+	%LOOP%:
+		LODSB
+		CMP	AL,','
+		JE	%DONE%
+		CMP	AL,';'
+		JE	%DONE%
+		CMP	AL,13
+		JE	%DONE%
+		STOSB
+		JMP	%LOOP%
+	%DONE%:
+	}
+	MOV	SI,OFFSET SUFFIX
+	MOV	CX,OFFSET SUFFIXE-OFFSET SUFFIX
+	REP	MOVSB
+	MOV	BYTE PTR [DI],13
+	XCHG	AX,DI
+	SUB	AX,OFFSET ARGFOREXEC+1
+	MOV	[ARGFOREXEC],AL
+	;; CX=0
+	;; Create temporary file
+	MOV	DX,OFFSET TFILE
+	MOV	AH,3CH		; Creat
+	INT	21H
+	ERREXIT	ERR_CREATE
+	;; Duplicate standard output
+	PUSH	AX
+	MOV	BX,1
+	MOV	AH,45H		; Dup
+	INT	21H
+	ERREXIT	ERR_DUP
+	POP	BX
+	;; Redirect to the temporary file
+	PUSH	AX
+	MOV	CX,1
+	MOV	AH,46H		; Dup2
+	INT	21H
+	ERREXIT	ERR_DUP2
+	;; Close the first opened temporary file
+	MOV	AH,3EH		; Close
+	INT	21H
+	;; ERREXIT cannot be used because of the redirection
+	;; Exec REMOVER
+	;; SP=STACK-2
+	XOR	AX,AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	CS
+	MOV	BX,OFFSET ARGFOREXEC
+	PUSH	BX
+	PUSH	AX
+	MOV	BX,SP
+	MOV	DX,OFFSET REMOVER
+	MOV	AX,4B00H	; Exec
+	INT	21H
+	MOV	BX,CS
+	MOV	SS,BX
+	MOV	SP,OFFSET STACK-2
+	PUSH	CS
+	POP	DS
+	PUSH	CS
+	POP	ES
+	;; Restore standard output again
+	POP	BX
+	PUSHF
+	MOV	CX,1
+	MOV	AH,46H		; Dup2
+	INT	21H
+	ERREXIT	ERR_DUP2
+	POPF
+	ERREXIT	ERR_EXEC
+	;; Check return code
+	MOV	AH,4DH		; Wait
+	INT	21H
+	CMP	AX,1
+	CMC
+	ERREXIT	ERR_RETCODE
+	;; Construct command line for RUNMASM
+	MOV	DI,OFFSET ARGFOREXEC+1
+	MOV	AL,' '
+	STOSB
+	MOV	SI,OFFSET TFILE
+	MOV	CX,OFFSET TFILES-OFFSET TFILE
+	REP	MOVSB
+	MOV	SI,OFFSET ARG+2
+	{(WHILE)
+	%LOOP%:
+		LODSB
+		CMP	AL,','
+		JE	%DONE%
+		CMP	AL,13
+		JE	%DONE%
+		CMP	AL,';'
+		JNE	%LOOP%
+		;; If object file name is not specified,
+		;; pass the source file name again.
+		MOV	AL,','
+		STOSB
+		MOV	SI,OFFSET ARG+2+1
+	%DONE%:
+	}
+	DEC	SI
+	{(WHILE)
+	%LOOP%:
+		LODSB
+		STOSB
+		CMP	AL,13
+		JNE	%LOOP%
+	}
+	XCHG	AX,DI
+	SUB	AX,OFFSET ARGFOREXEC+1+1
+	MOV	[ARGFOREXEC],AL
+	;; Exec RUNMASM
+	XOR	AX,AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	AX
+	PUSH	CS
+	MOV	BX,OFFSET ARGFOREXEC
+	PUSH	BX
+	PUSH	AX
+	MOV	BX,SP
+	MOV	DX,OFFSET RUNMASM
+	MOV	AX,4B00H	; Exec
+	INT	21H
+	MOV	BX,CS
+	MOV	SS,BX
+	MOV	SP,OFFSET STACK
+	PUSH	CS
+	POP	DS
+	PUSH	CS
+	POP	ES
+	ERREXIT	ERR_EXEC
+	;; Delete temporary file
+	MOV	DX,OFFSET TFILE
+	MOV	AH,41H		; Unlink
+	INT	21H
+	ERREXIT	ERR_UNLINK
+	MOV	AX,4C00H	; Exit
+	INT	21H
+
+RUNMASM	DB	'RUNMASM.COM',0
+REMOVER	DB	'REMOVER.COM',0
+TFILE	DB	'TMP'
+SUFFIX	LABEL	BYTE
+TFILES	DB	'.ASM'
+SUFFIXE	LABEL	BYTE
+	DB	0
+ERR_OOM		DB 'Out of memory',13,10,'$'
+ERR_SETBLOCK	DB 'Setblock error',13,10,'$'
+ERR_EXEC	DB 'Exec error',13,10,'$'
+ERR_CREATE	DB 'Create error',13,10,'$'
+ERR_DUP		DB 'Dup error',13,10,'$'
+ERR_DUP2	DB 'Dup2 error',13,10,'$'
+ERR_RETCODE	DB 'Return code is not 0',13,10,'$'
+ERR_UNLINK	DB 'Unlink error',13,10,'$'
+	ALI	16
+STACK	EQU	$+4096
+
+A	ENDS
+	END	START

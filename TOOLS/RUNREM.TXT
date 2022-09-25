@@ -1,0 +1,29 @@
+RUN REMOVER.COM
+
+This tool calls REMOVER.COM with redirection to a temporary file
+first, then runs RUNMASM.COM with the temporary file name, then
+deletes the temporary file.
+
+REMOVER.COM and RUNMASM.COM are loaded from the current directory.
+
+-------
+Build
+-------
+
+PMASM RUNREM.PMA > RUNREM.ASM
+MASM RUNREM;
+LINK RUNREM;
+EXE2BIN RUNREM RUNREM.COM
+
+-------
+Command
+-------
+
+RUNREM same-as-masm-command-line
+
+At least a source file name must be specified in the command line.
+
+Note: if the source file name contains directory name, the assembler
+may make output files in a different directory, because the source
+file name is replaced with a temporary file name in the current
+directory.
