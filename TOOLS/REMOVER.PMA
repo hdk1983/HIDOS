@@ -79,7 +79,7 @@ CHAR_SYMBOL	EQU	4
 	{(IF)
 		CMP	BL,"'"
 		JE	%THEN%
-		CMP	BL,33
+		CMP	BL,34
 		JNE	%ENDIF%
 	%THEN%:
 		{(IF)
