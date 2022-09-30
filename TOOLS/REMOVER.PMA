@@ -687,69 +687,6 @@ CHAR_SYMOPE_BIT	EQU	4
  }
 }
 
-{(PROC(IS_KEY_IN_WORDS))
- {(ARG(BUF,KEY))
-  {(LOCAL(WORD,LEN,I))
-	{(WHILE)
-	%LOOP%:
-		MOV	AX,%BUF%
-		PUSH	AX
-		CALL	GET_WORD_START
-		ADD	SP,2
-		MOV	%WORD%,AX
-		PUSH	AX
-		CALL	GET_WORD_LEN
-		ADD	SP,2
-		MOV	%LEN%,AX
-		TEST	AX,AX
-		JE	%DONE%
-		MOV	WORD PTR %I%,0
-		{((LOOP,DIFF))
-		%LOOP%:
-			MOV	BX,%KEY%
-			ADD	BX,%I%
-			{(IF)
-				CMP	BYTE PTR [BX],0
-				JNE	%ENDIF%
-				MOV	AX,1
-				JMP	%DONE%
-			%ENDIF%:
-			}
-			MOV	AX,%I%
-			CMP	AX,%LEN%
-			JAE	%DIFF%
-			MOV	BX,%WORD%
-			ADD	BX,%I%
-			XOR	AX,AX
-			MOV	AL,[BX]
-			PUSH	AX
-			CALL	TO_UPPER
-			ADD	SP,2
-			PUSH	AX
-			MOV	BX,%KEY%
-			ADD	BX,%I%
-			XOR	AX,AX
-			MOV	AL,[BX]
-			PUSH	AX
-			CALL	TO_UPPER
-			ADD	SP,2
-			POP	BX
-			CMP	AX,BX
-			JNE	%DIFF%
-			INC	WORD PTR %I%
-			JMP	%LOOP%
-		%DIFF%:
-		}
-		MOV	AX,%WORD%
-		ADD	AX,%LEN%
-		MOV	%BUF%,AX
-		JMP	%LOOP%
-	%DONE%:
-	}
-  }
- }
-}
-
 {(PROC(FIND_SYMS))
  {(ARG(BUF))
   {(LOCAL(WORD,LEN))
