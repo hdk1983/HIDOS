@@ -181,27 +181,6 @@ CHAR_SYMBOL	EQU	4
  }
 }
 
-{(PROC(GETC))
- {(ARG(FP))
-  {(LOCAL(BUF))
-	{(IF)
-		LEA	DX,%BUF%
-		MOV	CX,1
-		MOV	BX,%FP%
-		MOV	AH,3FH
-		INT	21H
-		JC	%THEN%
-		CMP	AX,1
-		MOV	AL,%BUF%
-		JE	%ENDIF%
-	%THEN%:
-		MOV	AX,-1
-	%ENDIF%:
-	}
-  }
- }
-}
-
 {(PROC(OPEN_FOR_READ))
  {(ARG(FILENAME))
 	MOV	DX,%FILENAME%
@@ -293,7 +272,7 @@ CHAR_SYMBOL	EQU	4
 
 {(PROC(GET_LINE))
  {(ARG(FP,BUF,BUFSIZE))
-  {(LOCAL(C,I))
+  {(LOCAL(C,I,GETCBUF))
 	MOV	WORD PTR %I%,0
 	{(WHILE)
 	%LOOP%:
@@ -305,9 +284,20 @@ CHAR_SYMBOL	EQU	4
 		CALL	ERR_EXIT
 		POP	AX
 	%DO%:
-		PUSH	%FP%
-		CALL	GETC
-		ADD	SP,2
+		{(IF)
+			LEA	DX,%GETCBUF%
+			MOV	CX,1
+			MOV	BX,%FP%
+			MOV	AH,3FH
+			INT	21H
+			JC	%THEN%
+			CMP	AX,1
+			MOV	AL,%GETCBUF%
+			JE	%ENDIF%
+		%THEN%:
+			MOV	AX,-1
+		%ENDIF%:
+		}
 		AND	AL,7FH
 		CMP	AL,13
 		JE	%DO%
