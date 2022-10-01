@@ -58,6 +58,87 @@ CHAR_SYMBOL	EQU	4
 CHAR_OPERATOR	EQU	5
 CHAR_SYMOPE_BIT	EQU	4
 
+S_HASH	STRUC
+HA_NEXT	DW	?		; Pointer to next entry of same hash
+HA_SYM	DW	?		; Pointer to symbol word structure
+HA_NLEN	DB	?		; Name length
+HA_NAME	DB	?		; Name starts here
+S_HASH	ENDS
+
+S_SYM	STRUC
+SY_NEXT	DW	?		; Pointer to next of same group circular list
+SY_REL	DW	?		; Pointer to related word list
+SY_NEED	DB	?		; Need flag
+S_SYM	ENDS
+
+S_REL	STRUC
+RE_NEXT	DW	?		; Pointer to next related word
+RE_HASH	DW	?		; Pointer to S_HASH for referencing name
+S_REL	ENDS
+
+;;; Simplified example:
+;;;  NAME1 EQU 1
+;;;  NAME2 STRUC
+;;;  NAME3 DB ?
+;;;  NAME4 DB (SIZE NAME5) DUP (?)
+;;;  NAME2 ENDS
+;;;  hash("NAME1")=0, hash("NAME2")=0,
+;;;  hash("NAME3")=1, hash("NAME4")=1,
+;;;  hash("NAME5")=2
+;;; HASHTBL[0] -> HASH2
+;;; HASHTBL[1] -> HASH4
+;;; HASHTBL[2] -> HASH5
+;;; HASH1: S_HASH(SYM1,"NAME1") -> NULL
+;;; HASH2: S_HASH(SYM2,"NAME2") -> HASH1
+;;; HASH3: S_HASH(SYM3,"NAME3") -> NULL
+;;; HASH4: S_HASH(SYM4,"NAME4") -> HASH3
+;;; HASH5: S_HASH(NULL,"NAME5") -> NULL
+;;; SYM1: S_SYM(REL1) -> SYM1
+;;; SYM2: S_SYM(REL2) -> SYM3
+;;; SYM3: S_SYM(REL3) -> SYM4
+;;; SYM4: S_SYM(REL4) -> SYM2
+;;; REL1: S_REL(HASH1) -> NULL
+;;; REL2: S_REL(HASH2) -> NULL
+;;; REL3: S_REL(HASH3) -> NULL
+;;; REL4: S_REL(HASH5) -> S_REL(HASH4) -> NULL
+;;; Insert a list:
+;;;   p->next=current
+;;;   current=p
+;;; Insert a circular list:
+;;;   if current=NULL then
+;;;     p->next=p
+;;;     current=p
+;;;   else
+;;;     p->next=current->next
+;;;     current->next=p
+;;;     current=p
+;;;   end if
+
+SYMCUR	DW	0
+HASHTBL	DW	256 DUP (0)
+
+{(PROC(HASHADR))
+ {(ARG(BUF,LEN))
+	MOV	SI,%BUF%
+	MOV	CX,%LEN%
+	CLD
+	XOR	BX,BX
+	{(WHILE)
+		JCXZ	%DONE%
+	%LOOP%:
+		LODSB
+		OR	AL,'a'-'A'
+		ROL	BL,1
+		ADD	BL,AL
+		LOOP	%LOOP%
+	%DONE%:
+	}
+	MOV	AX,BX
+	ADD	AX,BX
+	ADD	AX,OFFSET HASHTBL
+ }
+}
+
 {(PROC(ERR_EXIT))
  {(ARG(MESSAGE))
 	MOV	BX,%MESSAGE%
@@ -392,87 +473,85 @@ CHAR_SYMOPE_BIT	EQU	4
  }
 }
 
-{(PROC(STOR_GET))
- {(ARG(OFF,S,C))
-  {(LOCAL(LEN))
-	MOV	AX,%OFF%
-	ADD	AX,2
-	{(IF)
-		CMP	AX,[STORLEN]
-		JB	%ELSE%
-		MOV	AX,0FFFFH
-		JMP	SHORT %ENDIF%
-	%ELSE%:
-		MOV	AX,OFFSET STOR
-		ADD	AX,%OFF%
-		MOV	BX,%S%
-		MOV	[BX],AX
-		INC	WORD PTR %OFF%
-		MOV	BX,OFFSET STOR
-		ADD	BX,%OFF%
-		XOR	AX,AX
-		MOV	AL,[BX]
-		MOV	%LEN%,AX
-		INC	WORD PTR %OFF%
-		MOV	AX,OFFSET STOR
-		ADD	AX,%OFF%
-		MOV	BX,%C%
-		MOV	[BX],AX
-		MOV	AX,%LEN%
-	%ENDIF%:
-	}
-  }
- }
-}
-
-{(PROC(STOR_NEXT))
- {(ARG(OFF,LEN))
-	MOV	AX,%OFF%
-	ADD	AX,2
-	ADD	AX,%LEN%
- }
-}
-
-{(PROC(FIND_SYM))
+{(PROC(FIND_NAME))
  {(ARG(WORD,WORDLEN))
-  {(LOCAL(OFF,LEN,S,C))
-	MOV	WORD PTR %OFF%,0
-	{(WHILE)
+	PUSH	%WORDLEN%
+	PUSH	%WORD%
+	CALL	HASHADR
+	ADD	SP,4
+	MOV	BX,AX
+	SUB	BX,OFFSET HA_NEXT
+	{((LOOP,NOTF,FND,END))
 	%LOOP%:
-		LEA	AX,%C%
+		MOV	BX,[BX.HA_NEXT]
+		TEST	BX,BX
+		JE	%NOTF%
+		XOR	AX,AX
+		MOV	AL,[BX.HA_NLEN]
+		MOV	CX,%WORDLEN%
+		CMP	AX,CX
+		JNE	%LOOP%	; Fast path
+		PUSH	BX
 		PUSH	AX
-		LEA	AX,%S%
+		LEA	AX,[BX.HA_NAME]
 		PUSH	AX
-		PUSH	%OFF%
-		CALL	STOR_GET
-		ADD	SP,6
-		MOV	%LEN%,AX
-		INC	AX
+		PUSH	CX
+		PUSH	%WORD%
+		CALL	CMP_WORD
+		ADD	SP,8
+		POP	BX
+		TEST	AX,AX
+		JE	%LOOP%
+	%FND%:
+		MOV	AX,BX
+		JMP	SHORT %END%
+	%NOTF%:
+		XOR	AX,AX
+	%END%:
+	}
+ }
+}
+
+{(PROC(NEED_HASH))
+ {(ARG(HASH))
+  {(LOCAL(SYM))
+	{(WHILE)
+		MOV	BX,%HASH%
+		MOV	BX,[BX.HA_SYM]
+		TEST	BX,BX
 		JE	%DONE%
-		{(IF)
-			MOV	BX,%S%
-			TEST	BYTE PTR [BX],STOR_SYM
-			JE	%ENDIF%
-			PUSH	%LEN%
-			PUSH	%C%
-			PUSH	%WORDLEN%
-			PUSH	%WORD%
-			CALL	CMP_WORD
-			ADD	SP,8
-			TEST	AX,AX
-			JE	%ENDIF%
-			XOR	AX,AX
-			MOV	BX,%S%
-			MOV	AL,[BX]
-			JMP	SHORT %DONE%
-		%ENDIF%:
+		CMP	[BX.SY_NEED],0
+		JNE	%DONE%
+		MOV	AX,BX
+		MOV	%SYM%,AX
+		{(WHILE)
+		%LOOP%:
+			MOV	[BX.SY_NEED],1
+			MOV	BX,[BX.SY_NEXT]
+			CMP	BX,AX
+			JNE	%LOOP%
 		}
-		PUSH	%LEN%
-		PUSH	%OFF%
-		CALL	STOR_NEXT
-		ADD	SP,4
-		MOV	%OFF%,AX
-		JMP	%LOOP%
+	%LOOP%:
+		PUSH	BX
+		MOV	BX,[BX.SY_REL]
+		{(WHILE)
+			TEST	BX,BX
+			JE	%DONE%
+		%LOOP%:
+			PUSH	BX
+			PUSH	[BX.RE_HASH]
+			CALL	NEED_HASH
+			ADD	SP,2
+			POP	BX
+			MOV	BX,[BX.RE_NEXT]
+			TEST	BX,BX
+			JNE	%LOOP%
+		%DONE%:
+		}
+		POP	BX
+		MOV	BX,[BX.SY_NEXT]
+		CMP	BX,%SYM%
+		JNE	%LOOP%
 	%DONE%:
 	}
   }
@@ -481,192 +560,161 @@ CHAR_SYMOPE_BIT	EQU	4
 
 {(PROC(NEED_WORD))
  {(ARG(WORD,WORDLEN))
-  {(LOCAL(OFF,LEN,S,C,OFF_BEGIN))
-	MOV	WORD PTR %OFF_BEGIN%,-1
-	MOV	WORD PTR %OFF%,0
-	{((LOOP1,FOUND,END))
-	%LOOP1%:
-		LEA	AX,%C%
+	PUSH	%WORDLEN%
+	PUSH	%WORD%
+	CALL	FIND_NAME
+	ADD	SP,4
+	{(IF)
+		TEST	AX,AX
+		JE	%ENDIF%
 		PUSH	AX
-		LEA	AX,%S%
+		CALL	NEED_HASH
+		ADD	SP,2
+	%ENDIF%:
+	}
+ }
+}
+
+{(PROC(ADD_STOR_ALLOC))
+ {(ARG(LEN))
+	MOV	CX,%LEN%
+	MOV	DX,[STORLEN]
+	MOV	AX,STORSIZE
+	SUB	AX,DX
+	CMP	AX,CX
+	{(IF)
+		JNC	%ENDIF%
+		MOV	AX,OFFSET MSG_OUT_OF_MEMORY
 		PUSH	AX
-		PUSH	%OFF%
-		CALL	STOR_GET
-		ADD	SP,6
-		MOV	%LEN%,AX
-		INC	AX
-		{((SKIP))
-			JNE	%SKIP%
-			JMP	%END%
-		%SKIP%:
-		}
-		MOV	BX,%S%
+		CALL	ERR_EXIT
+		POP	AX
+	%ENDIF%:
+	}
+	MOV	AX,OFFSET STOR
+	ADD	AX,DX
+	ADD	DX,CX
+	MOV	[STORLEN],DX
+ }
+}
+
+{(PROC(ADD_STOR))
+ {(ARG(S,BUF,LEN))
+  {(LOCAL(HASH))
+	MOV	WORD PTR %HASH%,0
+	MOV	AX,%LEN%
+	{(IF)
+		TEST	AX,AX
+		JE	%ENDIF%
 		{(IF)
-			TEST	BYTE PTR [BX],STOR_BEGIN
-			JE	%ENDIF%
-			CMP	WORD PTR %OFF_BEGIN%,-1
-			JNE	%ENDIF%
-			MOV	AX,%OFF%
-			MOV	%OFF_BEGIN%,AX
-		%ENDIF%:
-		}
-		{(IF)
-			TEST	BYTE PTR [BX],STOR_END
-			JE	%ENDIF%
-			MOV	WORD PTR %OFF_BEGIN%,-1
-		%ENDIF%:
-		}
-		{(IF)
-			TEST	BYTE PTR [BX],STOR_SYM
-			JE	%ENDIF%
-			PUSH	%LEN%
-			PUSH	%C%
-			PUSH	%WORDLEN%
-			PUSH	%WORD%
-			CALL	CMP_WORD
-			ADD	SP,8
+			PUSH	AX
+			PUSH	%BUF%
+			CALL	FIND_NAME
+			ADD	SP,4
 			TEST	AX,AX
-			JE	%ENDIF%
-			MOV	BX,%S%
-			TEST	BYTE PTR [BX],STOR_NEED
-			JE	%FOUND%
-			JMP	%END%
+			JE	%ELSE%
+			MOV	%HASH%,AX
+			JMP	%ENDIF%
+		%ELSE%:
+			MOV	AX,%LEN%
+			ADD	AX,SIZE S_HASH-1
+			PUSH	AX
+			CALL	ADD_STOR_ALLOC
+			ADD	SP,2
+			MOV	%HASH%,AX
+			PUSH	%LEN%
+			PUSH	%BUF%
+			CALL	HASHADR
+			ADD	SP,4
+			MOV	BX,AX
+			MOV	AX,%HASH%
+			MOV	CX,[BX]
+			MOV	[BX],AX
+			MOV	BX,AX
+			MOV	[BX.HA_NEXT],CX
+			MOV	[BX.HA_SYM],0
+			XOR	CX,CX
+			MOV	CL,%LEN%
+			MOV	[BX.HA_NLEN],CL
+			LEA	DI,[BX.HA_NAME]
+			CLD
+			MOV	SI,%BUF%
+			REP	MOVSB
 		%ENDIF%:
 		}
-		PUSH	%LEN%
-		PUSH	%OFF%
-		CALL	STOR_NEXT
-		ADD	SP,4
-		MOV	%OFF%,AX
-		JMP	%LOOP1%
-	%FOUND%:
+	%ENDIF%:
+	}
+	MOV	AX,%S%
+	{(IF)
+		TEST	AX,STOR_BEGIN OR STOR_END
+		JE	%ENDIF%
+		MOV	[SYMCUR],0
+	%ENDIF%:
+	}
+	{(IF)
+		TEST	AX,STOR_REL
+		JE	%ELSE%
+		MOV	AX,SIZE S_REL
+		PUSH	AX
+		CALL	ADD_STOR_ALLOC
+		ADD	SP,2
+		MOV	BX,[SYMCUR]
 		{(IF)
-			CMP	WORD PTR %OFF_BEGIN%,-1
+			TEST	BX,BX
+			JE	%THEN%
+			CMP	WORD PTR %HASH%,0
 			JNE	%ENDIF%
+		%THEN%:
 			MOV	AX,OFFSET MSG_INTERNAL_ERROR
 			PUSH	AX
 			CALL	ERR_EXIT
 			POP	AX
 		%ENDIF%:
 		}
-		MOV	AX,%OFF_BEGIN%
-		MOV	%OFF%,AX
-		{(WHILE)
-		%LOOP%:
-			LEA	AX,%C%
-			PUSH	AX
-			LEA	AX,%S%
-			PUSH	AX
-			PUSH	%OFF%
-			CALL	STOR_GET
-			ADD	SP,6
-			MOV	%LEN%,AX
-			INC	AX
-			JE	%DONE%
-			MOV	BX,%S%
-			{(IF)
-				TEST	BYTE PTR [BX],STOR_SYM
-				JE	%ENDIF%
-				OR	BYTE PTR [BX],STOR_NEED
-			%ENDIF%:
-			}
-			TEST	BYTE PTR [BX],STOR_END
-			JNE	%DONE%
-			PUSH	%LEN%
-			PUSH	%OFF%
-			CALL	STOR_NEXT
-			ADD	SP,4
-			MOV	%OFF%,AX
-			JMP	%LOOP%
-		%DONE%:
-		}
-		MOV	AX,%OFF_BEGIN%
-		MOV	%OFF%,AX
-		{(WHILE)
-		%LOOP%:
-			LEA	AX,%C%
-			PUSH	AX
-			LEA	AX,%S%
-			PUSH	AX
-			PUSH	%OFF%
-			CALL	STOR_GET
-			ADD	SP,6
-			MOV	%LEN%,AX
-			INC	AX
-			JE	%DONE%
-			MOV	BX,%S%
-			{(IF)
-				TEST	BYTE PTR [BX],STOR_REL
-				JE	%ENDIF%
-				PUSH	%LEN%
-				PUSH	%C%
-				CALL	NEED_WORD
-				ADD	SP,4
-			%ENDIF%:
-			}
-			MOV	BX,%S%
-			TEST	BYTE PTR [BX],STOR_END
-			JNE	%DONE%
-			PUSH	%LEN%
-			PUSH	%OFF%
-			CALL	STOR_NEXT
-			ADD	SP,4
-			MOV	%OFF%,AX
-			JMP	%LOOP%
-		%DONE%:
-		}
-	%END%:
-	}
-  }
- }
-}
-
-{(PROC(ADD_STOR))
- {(ARG(S,BUF,LEN))
-  {(LOCAL(I))
-	MOV	BX,[STORLEN]
-	{(IF)
-		CMP	BX,STORSIZE
-		JNB	%ENDIF%
-		MOV	AL,%S%
-		MOV	[OFFSET STOR+BX],AL
-		INC	BX
-	%ENDIF%:
-	}
-	{(IF)
-		CMP	BX,STORSIZE
-		JNB	%ENDIF%
-		MOV	AL,%LEN%
-		MOV	[OFFSET STOR+BX],AL
-		INC	BX
-	%ENDIF%:
-	}
-	MOV	WORD PTR %I%,0
-	{(WHILE)
-	%LOOP%:
-		MOV	AX,%I%
-		CMP	AX,%LEN%
-		JNB	%DONE%
-		CMP	BX,STORSIZE
-		JNB	%DONE%
-		MOV	SI,%BUF%
-		ADD	SI,%I%
-		MOV	AL,[SI]
-		MOV	[OFFSET STOR+BX],AL
-		INC	BX
-		INC	WORD PTR %I%
-		JMP	%LOOP%
-	%DONE%:
-	}
-	MOV	[STORLEN],BX
-	{(IF)
-		MOV	AX,%I%
-		CMP	AX,%LEN%
-		JNB	%ENDIF%
-		MOV	AX,OFFSET MSG_OUT_OF_MEMORY
+		MOV	CX,[BX.SY_REL]
+		MOV	[BX.SY_REL],AX
+		MOV	BX,AX
+		MOV	[BX.RE_NEXT],CX
+		MOV	AX,%HASH%
+		MOV	[BX.RE_HASH],AX
+		JMP	%ENDIF%
+	%ELSE%:
+		TEST	AX,STOR_SYM
+		JE	%ENDIF%
+		MOV	AX,SIZE S_SYM
 		PUSH	AX
-		CALL	ERR_EXIT
-		POP	AX
+		CALL	ADD_STOR_ALLOC
+		ADD	SP,2
+		MOV	BX,AX
+		MOV	SI,[SYMCUR]
+		{(IF)
+			TEST	SI,SI
+			JNE	%ELSE%
+			MOV	[BX.SY_NEXT],AX
+			JMP	%ENDIF%
+		%ELSE%:
+			MOV	CX,[SI.SY_NEXT]
+			MOV	[BX.SY_NEXT],CX
+			MOV	[SI.SY_NEXT],AX
+		%ENDIF%:
+		}
+		MOV	[SYMCUR],AX
+		XOR	CX,CX
+		MOV	[BX.SY_REL],CX
+		MOV	[BX.SY_NEED],CL
+		MOV	BX,%HASH%
+		{(IF)
+			TEST	BX,BX
+			JE	%THEN%
+			CMP	[BX.HA_SYM],0
+			JE	%ENDIF%
+		%THEN%:
+			MOV	AX,OFFSET MSG_INTERNAL_ERROR
+			PUSH	AX
+			CALL	ERR_EXIT
+			POP	AX
+		%ENDIF%:
+		}
+		MOV	[BX.HA_SYM],AX
 	%ENDIF%:
 	}
   }
@@ -691,9 +739,13 @@ CHAR_SYMOPE_BIT	EQU	4
 		JE	%DONE%
 		PUSH	%LEN%
 		PUSH	%WORD%
-		CALL	FIND_SYM
+		CALL	FIND_NAME
 		ADD	SP,4
 		{(IF)
+			TEST	AX,AX
+			JE	%ENDIF%
+			MOV	BX,AX
+			MOV	AX,[BX.HA_SYM]
 			TEST	AX,AX
 			JE	%ENDIF%
 			MOV	AX,1
@@ -841,8 +893,12 @@ CHAR_SYMOPE_BIT	EQU	4
 				{(IF)
 					PUSH	%LEN%
 					PUSH	%WORD%
-					CALL	FIND_SYM
+					CALL	FIND_NAME
 					ADD	SP,4
+					TEST	AX,AX
+					JE	%ENDIF%
+					MOV	BX,AX
+					MOV	AX,[BX.HA_SYM]
 					TEST	AX,AX
 					JE	%ENDIF%
 					MOV	AX,OFFSET MSG_STRUC2
@@ -882,8 +938,12 @@ CHAR_SYMOPE_BIT	EQU	4
 		{(IF)
 			PUSH	%LEN%
 			PUSH	%WORD%
-			CALL	FIND_SYM
+			CALL	FIND_NAME
 			ADD	SP,4
+			TEST	AX,AX
+			JE	%ENDIF%
+			MOV	BX,AX
+			MOV	AX,[BX.HA_SYM]
 			TEST	AX,AX
 			JE	%ENDIF%
 			MOV	AX,OFFSET MSG_STRUC
@@ -939,8 +999,12 @@ CHAR_SYMOPE_BIT	EQU	4
 			{(IF)
 				PUSH	%LEN%
 				PUSH	%WORD%
-				CALL	FIND_SYM
+				CALL	FIND_NAME
 				ADD	SP,4
+				TEST	AX,AX
+				JE	%ELSE%
+				MOV	BX,AX
+				MOV	AX,[BX.HA_SYM]
 				TEST	AX,AX
 				JE	%ELSE%
 				PUSH	%LEN%
@@ -1063,7 +1127,7 @@ CHAR_SYMOPE_BIT	EQU	4
 
 {(PROC(PASS3))
  {(ARG(BUF,WORD,LEN,WORD2,LEN2))
-  {(LOCAL(S,UNUSED))
+  {(LOCAL(UNUSED))
    {((RET))
 	MOV	WORD PTR %UNUSED%,0
 	{(IF)
@@ -1106,13 +1170,16 @@ CHAR_SYMOPE_BIT	EQU	4
 		MOV	WORD PTR [IN_STRUC],1
 		PUSH	%LEN%
 		PUSH	%WORD%
-		CALL	FIND_SYM
+		CALL	FIND_NAME
 		ADD	SP,4
-		MOV	%S%,AX
 		{(IF)
 			TEST	AX,AX
 			JE	%ENDIF%
-			TEST	AX,STOR_NEED
+			MOV	BX,AX
+			MOV	BX,[BX.HA_SYM]
+			TEST	BX,BX
+			JE	%ENDIF%
+			CMP	[BX.SY_NEED],0
 			JNE	%ENDIF%
 			MOV	WORD PTR [IN_STRUC],2
 			MOV	WORD PTR %UNUSED%,1
@@ -1145,13 +1212,16 @@ CHAR_SYMOPE_BIT	EQU	4
 	%THEN%:
 		PUSH	%LEN%
 		PUSH	%WORD%
-		CALL	FIND_SYM
+		CALL	FIND_NAME
 		ADD	SP,4
-		MOV	%S%,AX
 		{(IF)
 			TEST	AX,AX
 			JE	%ENDIF%
-			TEST	AX,STOR_NEED
+			MOV	BX,AX
+			MOV	BX,[BX.HA_SYM]
+			TEST	BX,BX
+			JE	%ENDIF%
+			CMP	[BX.SY_NEED],0
 			JNE	%ENDIF%
 			MOV	WORD PTR %UNUSED%,1
 		%ENDIF%:
