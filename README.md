@@ -9,12 +9,15 @@ Tools and scripts for building MS-DOS with DEBUG, MASM, LINK and EXE2BIN utiliti
 - ADDITION/ contains additional source files for building MS-DOS.
 - BUILD/ contains a batch file, input files for EXE2BIN, and symbolic links to the source code and utilities (DEBUG, MASM, LINK and EXE2BIN).
 - hidosvm/ contains a simple virtual machine for running VM_IO.SYS.
+- cross/ contains files for cross build.
 
 ## How to Build
 
 1. Prepare DOS environment.  (MS-DOS, FreeDOS and DOSBox are usable.)
 2. Copy files in the BUILD/ directory to a file system accessible from the DOS.
 3. Change current working directory to the BUILD/ directory and run M.BAT on the DOS.  Binaries will be stored to BUILD/BIN/ directory.
+
+See cross/HOWTO.md for cross build details.
 
 ## Build on MS-DOS 2.11
 

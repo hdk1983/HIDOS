@@ -1,0 +1,48 @@
+DOS COMMAND EXECUTOR
+
+This command executes DOS command for 8086 on x86 modern operating
+systems.  This command is designed for MASM, LINK and some simple
+utilities.  Only few system calls are supported.
+
+The binary is 32-bit.  You need a 32-bit compatible C library.
+
+-------
+Build
+-------
+
+  make doscomm
+
+-------
+Command
+-------
+
+  ./doscomm DOS-command-line
+
+For example:
+
+  ./doscomm MASM.EXE "SOURCE;"
+
+-----------------------------------------------
+Why was it written in 32-bit x86 assembly?
+-----------------------------------------------
+
+This program is like an emulator interpreting 8086 instruction one by
+one.  When I wrote such interpreter in C, there were a lot of
+difficult things about implementing x86 instruction in C.  For
+example, there are rotate instructions and packed BCD instructions,
+which can be more complex code than in assembly.  In addition, flags
+register is also complex - some instruction changes flags, some not,
+overflow detection, etc.  If I use x86 assembly language, I can use
+such instructions or flags register directly.
+
+If virtual 8086 mode is available, DOS binaries are simply executable
+directly by the processor.  It is still available in 32-bit mode, but
+operating systems using 64-bit mode generally do not support virtual
+8086 mode, because switching between 64-bit mode and 32-bit mode is
+too complex and only few people want to use - nowadays people just use
+virtual machines if they need to use DOS applications on 64-bit
+operating systems.
+
+The reason of 32-bit is that BCD instructions are not available on
+64-bit long mode.  32-bit binaries are still supported on many 64-bit
+operating systems, so it should work.
