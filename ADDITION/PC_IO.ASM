@@ -1687,7 +1687,7 @@ SEGMOVE:
 SEGOK:
 	;; Scan drives
 	PUSH	DX
-	;; Save high density flag of JX
+	;; Save 80 tracks per side flag of JX
 	MOV	AL,40H
 	AND	AL,DL
 	MOV	ES:[DRVFLG],AL
