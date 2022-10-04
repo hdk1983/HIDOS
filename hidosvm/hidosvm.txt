@@ -57,6 +57,14 @@ This virtual machine loads VM_IO.SYS (or IO.SYS) and MSDOS.SYS
 directly from the FAT12 file system in the first disk image.  No boot
 code installation is needed.
 
+If modification timestamp of the image file is changed, DOS on the
+virtual machine detects it as media changed.  This allows using mtools
+while a virtual machine using the image is running.  Note that this is
+similar to floppy change -- do not change floopy disks while they are
+using.  If the image is modified by outside of the virtual machine
+while there are dirty buffers in the DOS, the image probably will be
+corrupted.
+
 -------
 Specs
 -------
@@ -112,6 +120,9 @@ Device names and commands:
                IOBUF (dword) to memory address IOADR (dword).
     IOCMD 'WR' copys IOSIZ (dword) bytes from memory address IOADR
                (dword) to the disk byte offset IOBUF (dword).
+    IOCMD 'CH' returns -1 (image file timestamp changed), 1 (image
+               file timestamp not changed) or 0 (device file or
+               error) to IOBUF (word).
 
   IODEV 'CO' for console I/O
   IOIDX must be 0.

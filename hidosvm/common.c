@@ -28,6 +28,10 @@
 #include <sys/poll.h>
 #include <time.h>
 #include <sys/time.h>
+#include <sys/file.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include "common.h"
 
@@ -43,7 +47,8 @@ enum
 
 static uint8_t *mem;
 static int ndisks;
-static char **disks;
+static int *diskfd;
+static struct timespec *diskmtim;
 static uint32_t msdos_addr;
 static uint32_t ram_size;
 
@@ -105,6 +110,28 @@ memw4 (uint32_t addr, uint32_t value)
   memw2 (addr + 2, value >> 16);
 }
 
+static unsigned
+diskch (int drive)
+{
+  int fd = diskfd[drive];
+  struct stat s;
+  if (diskmtim[drive].tv_sec == 0 && diskmtim[drive].tv_nsec == 1)
+    return 0;
+  if (fstat (fd, &s) < 0)
+    {
+      perror ("fstat");
+      diskmtim[drive].tv_sec = 0;
+      diskmtim[drive].tv_nsec = 1;
+      return 0;
+    }
+  if (s.st_mtim.tv_sec == diskmtim[drive].tv_sec &&
+      s.st_mtim.tv_nsec == diskmtim[drive].tv_nsec)
+    return 1;
+  diskmtim[drive].tv_sec = s.st_mtim.tv_sec;
+  diskmtim[drive].tv_nsec = s.st_mtim.tv_nsec;
+  return ~0;
+}
+
 static int
 diskrw (int drive, int wr, uint32_t addr, uint32_t off, uint32_t len)
 {
@@ -113,19 +140,10 @@ diskrw (int drive, int wr, uint32_t addr, uint32_t off, uint32_t len)
       fprintf (stderr, "Invalid drive %d\r\n", drive);
       return -1;
     }
-  FILE *fp = fopen (disks[drive], wr ? "r+" : "r");
-  if (!fp)
-    {
-      perror ("fopen");
-      return -1;
-    }
+  int fd = diskfd[drive];
+  if (flock (fd, (wr ? LOCK_EX : LOCK_SH) | LOCK_NB) < 0)
+    return -1;
   int ret = 0;
-  if (fseek (fp, off, SEEK_SET))
-    {
-      perror ("fseek");
-      ret = -1;
-      goto err;
-    }
   while (len > 0)
     {
       uint32_t remaining = MEMSIZE8086 - (memp (addr) - mem);
@@ -133,27 +151,43 @@ diskrw (int drive, int wr, uint32_t addr, uint32_t off, uint32_t len)
 	remaining = len;
       if (wr)
 	{
-	  if (fwrite (memp (addr), remaining, 1, fp) != 1)
+	  if (pwrite (fd, memp (addr), remaining, off) != remaining)
 	    {
-	      perror ("fwrite");
+	      perror ("pwrite");
 	      ret = -1;
 	      break;
 	    }
 	}
       else
 	{
-	  if (fread (memp (addr), remaining, 1, fp) != 1)
+	  if (pread (fd, memp (addr), remaining, off) != remaining)
 	    {
-	      perror ("fread");
+	      perror ("pread");
 	      ret = -1;
 	      break;
 	    }
 	}
       addr += remaining;
+      off += remaining;
       len -= remaining;
     }
- err:
-  fclose (fp);
+  if (wr)
+    {
+      struct stat s;
+      if (fstat (fd, &s) < 0)
+	{
+	  perror ("fstat");
+	  diskmtim[drive].tv_sec = 0;
+	  diskmtim[drive].tv_nsec = 1;
+	}
+      else
+	{
+	  diskmtim[drive].tv_sec = s.st_mtim.tv_sec;
+	  diskmtim[drive].tv_nsec = s.st_mtim.tv_nsec;
+	}
+    }
+  if (flock (fd, LOCK_UN) < 0)
+    perror ("flock");
   return ret;
 }
 
@@ -264,6 +298,9 @@ io_disk (unsigned addr, unsigned idx, unsigned cmd)
 	memw2 (addr + IOBUF, 0);
       else
 	memw2 (addr + IOBUF, 1);
+      break;
+    case 'C' << 8 | 'H':	/* Media change */
+      memw2 (addr + IOBUF, diskch (idx));
       break;
     default:
       return -1;
@@ -523,7 +560,46 @@ void
 init_common (int argc, char **argv)
 {
   ndisks = argc - 1;
-  disks = &argv[1];
+  if (!ndisks)
+    {
+      fprintf (stderr, "Error: no disk specified\n");
+      exit (EXIT_FAILURE);
+    }
+  diskfd = malloc (sizeof *diskfd * ndisks);
+  if (!diskfd)
+    {
+      perror ("malloc");
+      exit (EXIT_FAILURE);
+    }
+  diskmtim = malloc (sizeof *diskmtim * ndisks);
+  if (!diskmtim)
+    {
+      perror ("malloc");
+      exit (EXIT_FAILURE);
+    }
+  char **disks = &argv[1];
+  for (int i = 0; i < ndisks; i++)
+    {
+      int fd = open (disks[i], O_RDWR);
+      if (fd < 0)
+	{
+	  fd = open (disks[i], O_RDONLY);
+	  if (fd < 0)
+	    {
+	      perror ("open");
+	      exit (EXIT_FAILURE);
+	    }
+	}
+      struct stat s;
+      int statok = 0;
+      if (fstat (fd, &s) < 0)
+	perror ("fstat");
+      else if ((s.st_mode & S_IFMT) == S_IFREG)
+	statok = 1;
+      diskfd[i] = fd;
+      diskmtim[i].tv_sec = statok ? s.st_mtim.tv_sec : 0;
+      diskmtim[i].tv_nsec = statok ? s.st_mtim.tv_nsec : 1;
+    }
 }
 
 void

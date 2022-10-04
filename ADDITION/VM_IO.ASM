@@ -662,7 +662,13 @@ MEDIAS2 DB      ?                       ;Media status byte flag.
 MEDIAS  ENDS
 
 MEDIAC:
-	MOV	AX,100H
+	CBW
+	MOV	[IOAREA.IOIDX],AX
+	MOV	[IOAREA.IOCMD],'CH'
+	CALL	CALLIO
+	MOV	AX,[IOAREA.IOBUF]
+	MOV	AH,AL
+	MOV	AL,0
 MEDIA1: LDS     BX,[PTRSAV]     ;Udate media section of data block.
         MOV     [BX.MEDIAS2],AH
         JMP     EXIT
