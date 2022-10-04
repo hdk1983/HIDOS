@@ -5,7 +5,7 @@ Tools and scripts for building MS-DOS with DEBUG, MASM, LINK and EXE2BIN utiliti
 ## Files
 
 - MS-DOS/ is a submodule repository of the MS-DOS source code with some fixes.
-- TOOLS/ contains two preprocessor tools and MASM wrappers for building MS-DOS with MASM Version 1.10.
+- TOOLS/ contains tools for building MS-DOS with MASM Version 1.10 and LINK Version 2.00.
 - ADDITION/ contains additional source files for building MS-DOS.
 - BUILD/ contains a batch file, input files for EXE2BIN, and symbolic links to the source code and utilities (DEBUG, MASM, LINK and EXE2BIN).
 - hidosvm/ contains a simple virtual machine for running VM_IO.SYS.
@@ -89,7 +89,7 @@ See hidosvm/hidosvm.txt for details.
 | PROFIL.COM        | OK                  |                            |
 | PRINT.COM         | OK                  | OK (resident on MS-DOS)    |
 | RECOVER.COM       | OK                  | OK (on MS-DOS)             |
-| SORT.EXE          | OK                  | See below                  |
+| SORT.EXE          | OK                  | OK                         |
 | SYS.COM           | OK                  | OK (on MS-DOS)             |
 
 ## Bugs
@@ -110,9 +110,3 @@ IBM version seems calling ROM BIOS directly from COMMAND.COM.
 
 `DIR /P` command pauses per 23 lines, defined as LINPERPAG in COMEQU.ASM.
 It is not good if the screen has less than 24 lines, like JX Japanese kihon-mode.
-
-### SORT.EXE
-
-Something goes wrong.
-It shows "SORT: Insufficient memory" on DOS 2.x.
-It works on FreeDOS but after completion the system shows "PANIC: MCB chain corrupted".

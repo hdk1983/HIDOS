@@ -1,0 +1,23 @@
+SET MAXIMUM ALLOCATION
+
+This tool modifies maximum allocation field in MZ file structure.
+Linkers might have an option specifying the value.
+
+If the value is set to zero, it looks like same as /HIGH option of
+LINK.  Linker default value is 65535 (ffff), which prevents the
+process from using Alloc system call unless using SetBlock to shrink
+the pre-allocated block.
+
+-------
+Build
+-------
+
+MASM SETMAXAL;
+LINK SETMAXAL;
+EXE2BIN SETMAXAL SETMAXAL.COM
+
+-------
+Command
+-------
+
+SETMAXAL.COM FILENAME.EXE maximum-allocation(hex)
