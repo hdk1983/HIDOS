@@ -59,37 +59,40 @@ entry	BUFOUT
 	; Fall through
 entry	OUT
 ; called by STRIN.ASM, DISK.ASM and MISC.ASM.
-	CALL	UPDATE_CARPOS
+	;; Expanding tabs and updating CARPOS.
+	;; Output with AH=40H is handled in DISK.ASM
+	;; which calls this in case of cooked CON only.
+	;; Output with AH=02H or AH=09H calls this
+	;; even if output is redirected...
+	CMP	AL,c_CR
+	JE	OUT_CR
+	CMP	AL,c_BS
+	JE	OUT_BS
+	CMP	AL,c_LF
+	JE	OUT_LF
+	CMP	AL,c_HT
+	JNE	OUT_CHAR
+OUT_TAB:
+	MOV	AL,' '
+	CALL	OUT_CHAR
+	TEST	[CARPOS],7
+	JNE	OUT_TAB
+	MOV	AL,c_HT
+	RET
+OUT_CR:
+	MOV	[CARPOS],1
+OUT_BS:
+	DEC	[CARPOS]
+	JMP	SHORT OUT_LF
+OUT_CHAR:
+	INC	[CARPOS]
+OUT_LF:
 	PUSH	DS
 	PUSH	SI
 	invoke	RAWOUT
 	POP	SI
 	POP	DS
 	RET
-
-; Simple workaround for updating CARPOS.
-; Maybe this is different from other DOS.
-; Note that this does not check whether stdout is redirected.
-UPDATE_CARPOS PROC NEAR
-	CMP	AL,c_CR
-	JE	UPDATE_CARPOS_CR
-	CMP	AL,c_BS
-	JE	UPDATE_CARPOS_BS
-	CMP	AL,c_LF
-	JE	UPDATE_CARPOS_LF
-	CMP	AL,c_HT
-	JNE	UPDATE_CARPOS_CHAR
-	OR	[CARPOS],7
-UPDATE_CARPOS_CHAR:
-	INC	[CARPOS]
-	RET
-UPDATE_CARPOS_CR:
-	MOV	[CARPOS],1
-UPDATE_CARPOS_BS:
-	DEC	[CARPOS]
-UPDATE_CARPOS_LF:
-	RET
-UPDATE_CARPOS ENDP
 
 entry	TAB
 ; called by PUTNEW in STRIN.ASM.
@@ -141,13 +144,8 @@ IO_COMMON_LOOP:
 $STD_CON_INPUT ENDP
 
         procedure   $STD_CON_OUTPUT,NEAR   ; System call 2
-	PUSH	BX
-	CALL	UPDATE_CARPOS
-	MOV	BX,1
-	MOV	AH,2
 	MOV	AL,DL
-	CALL	IO_COMMON
-	POP	BX
+	CALL	OUT
 	return
 $STD_CON_OUTPUT ENDP
 
@@ -198,11 +196,8 @@ STROUT_LOOP:
 	LODSB
 	CMP	AL,'$'
 	JE	STROUT_END
-	CALL	UPDATE_CARPOS
-	MOV	BX,1
-	MOV	AH,2
-	CALL	IO_COMMON
-	JNC	STROUT_LOOP
+	CALL	OUT
+	JMP	STROUT_LOOP
 STROUT_END:
 	POP	BX
 	POP	SI

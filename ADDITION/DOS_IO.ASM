@@ -507,12 +507,24 @@ CON_WRIT:
 ;
 
 INT29H:
+	PUSH	DX
+	CALL	VECTSWAP
+	CMP	AL,0FFH
+	JE	INT29H_VERYSLOW
+	MOV	DL,AL
+	PUSH	AX
+	MOV	AH,6		; Raw console input/output
+	INT	21H
+	POP	AX
+INT29H_RET:
+	CALL	VECTSWAP
+	POP	DX
+	IRET
+INT29H_VERYSLOW:
 	PUSH	DS
 	PUSH	BX
-	PUSH	DX
 	PUSH	CX
 	PUSH	AX
-	CALL	VECTSWAP
 	MOV	AX,SS
 	MOV	DS,AX
 	MOV	DX,SP
@@ -520,13 +532,11 @@ INT29H:
 	MOV	BX,1
 	MOV	AH,40H		; Write
 	INT	21H
-	CALL	VECTSWAP
 	POP	AX
 	POP	CX
-	POP	DX
 	POP	BX
 	POP	DS
-	IRET
+	JMP	INT29H_RET
 
         PAGE
         SUBTTL  Printer buffer handler.
@@ -825,6 +835,22 @@ EXT_EXIT:
 	MOV	AX,3301H
 	MOV	DL,CS:[OLDBREAK]
 	INT	21H
+	;; Restore raw/cooked mode in reverse order
+	;; because 0, 1 and 2 may share the same mode.
+	MOV	BX,4
+RESTORE_LOOP:
+	MOV	AX,4400H	; Ioctl / Get device information
+	INT	21H
+	JC	RESTORE_SKIP
+	TEST	DL,DL
+	JNS	RESTORE_SKIP	; Skip if file
+	AND	DH,7FH		; Clear reserved bit
+	MOV	DL,CS:[OLDDEVMODE+BX]
+	MOV	AX,4401H	; Ioctl / Set device information
+	INT	21H
+RESTORE_SKIP:
+	DEC	BX
+	JNS	RESTORE_LOOP
 	POP	AX
 	AND	AL,0FH
 	MOV	AH,4CH		; Exit
@@ -1166,6 +1192,7 @@ INITTAB_ADDR	DW	?
 DBP_ADDR	DW	?
 VECT_ADDR	DW	?
 OLDBREAK	DB	?
+OLDDEVMODE	DB	5 DUP (?)
 CON_BUF		DB	0,?
 AUX_BUF		DB	0,?
 DISK_RW_TMP	DW	?
@@ -1262,20 +1289,22 @@ READOK:
 	MOV	AH,3EH		; Close
 	INT	21H
 	;; Set devices to raw mode
-	MOV	BX,4
+	XOR	BX,BX
 SETRAW_LOOP:
 	MOV	AX,4400H	; Ioctl / Get device information
 	INT	21H
 	JC	SETRAW_SKIP
 	TEST	DL,DL
 	JNS	SETRAW_SKIP	; Skip if file
+	MOV	CS:[OLDDEVMODE+BX],DL
 	AND	DH,7FH		; Clear reserved bit
 	OR	DL,20H		; Set raw bit
 	MOV	AX,4401H	; Ioctl / Set device information
 	INT	21H
 SETRAW_SKIP:
-	DEC	BX
-	JPE	SETRAW_LOOP	; Jump if BX=3
+	INC	BX
+	CMP	BX,5
+	JB	SETRAW_LOOP
 	;; Disable ^C check
 	MOV	AX,3300H
 	INT	21H

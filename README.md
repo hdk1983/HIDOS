@@ -122,8 +122,14 @@ A>ECHO 0 > \DEV\EXIT$
 ### MSDOS.SYS
 
 The `CARPOS` variable is only updated in IO.ASM.
-Therefore the variable is not properly updated if applications use stdout or INT 29H.
+Therefore the variable is not updated if applications use raw output or INT 29H.
 DEBUG.COM and COMMAND.COM seem OK with this implementation.
+The behavior looks similar to PC DOS, as follows:
+
+- AH=02H or 09H (INT 21H) updates `CARPOS` and expands (horizontal) tabs.
+- AH=06H does not update `CARPOS` and does not expand tabs.
+- Cooked mode CON output acts like AH=02H or AH=09H.
+- Raw mode CON output acts like AH=06H.
 
 Unlike other DOS, if only one floppy drive is found, B: does not exist.
 
