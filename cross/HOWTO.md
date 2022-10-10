@@ -28,12 +28,12 @@ Makefile modification may be needed.
 
 ## Build on Windows (32-bit x86)
 
-Not tested.
+Tested on Windows 2000 (x86).
 
 For Windows 10 only.
 Windows 11 32-bit version is not released.
 
-Since 32-bit Windows can run MS-DOS applications, it should be able to run the build batch file directly.
+Since 32-bit Windows can run MS-DOS applications, it can run the build batch file directly.
 However, parallel make is probably not straightforward.
 
 The doscomm program may work on 32-bit Windows.
