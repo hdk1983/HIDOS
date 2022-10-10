@@ -69,6 +69,31 @@ Then start hidosvm/hidosvm or hidosvm/hidoskvm command with the disk image file 
 The HIDOS virtual machine is very simple architecture and NOT compatible with PC.
 See hidosvm/hidosvm.txt for details.
 
+## Boot on DOS
+
+The `DOS_IO.EXE` is IO.SYS implemented as a DOS application.
+Its command line parameter is MSDOS.SYS file name followed by drive-list that consists of FAT12 image file name or drive name (e.g. A:).
+A character device `EXIT$` is installed for exiting the DOS environment.
+Writing a digit (0 to 9) to the device exits the DOS with exit code specified by the digit.
+
+Examples: start DOS with mounting the image FDD.IMG to drive A:
+
+```
+A>DOS_IO.EXE MSDOS.SYS FDD.IMG
+```
+
+Start DOS with using the drive A and B as is:
+
+```
+A>DOS_IO.EXE MSDOS.SYS A: B:
+```
+
+Exit the DOS:
+
+```
+A>ECHO 0 > \DEV\EXIT$
+```
+
 ## Current Status
 
 | File Name         | Build               | Run                        |
