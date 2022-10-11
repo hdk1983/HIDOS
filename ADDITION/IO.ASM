@@ -72,11 +72,12 @@ entry	OUT
 	JE	OUT_LF
 	CMP	AL,c_HT
 	JNE	OUT_CHAR
-OUT_TAB:
+entry	TAB
+; called by PUTNEW in STRIN.ASM.
 	MOV	AL,' '
 	CALL	OUT_CHAR
 	TEST	[CARPOS],7
-	JNE	OUT_TAB
+	JNE	TAB
 	RET
 OUT_CR:
 	MOV	[CARPOS],1
@@ -92,11 +93,6 @@ OUT_LF:
 	POP	SI
 	POP	DS
 	RET
-
-entry	TAB
-; called by PUTNEW in STRIN.ASM.
-	MOV	AL,c_HT
-	JMP	OUT
 
 ; Use the same way as $RAW_CON_INPUT and RAWNORM.
 IO_COMMON:
