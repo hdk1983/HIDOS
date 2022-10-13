@@ -126,14 +126,12 @@ IO_COMMON_LOOP:
 	JMP	IO_COMMON_STAT
 
         procedure   $STD_CON_INPUT,NEAR   ; System call 1
-	PUSH	BX
 	XOR	BX,BX
 	XOR	AX,AX
 	CALL	IO_COMMON
 	PUSH	AX
 	CALL	OUT
 	POP	AX
-	POP	BX
 	CLC
 	return
 $STD_CON_INPUT ENDP
@@ -145,46 +143,36 @@ $STD_CON_INPUT ENDP
 $STD_CON_OUTPUT ENDP
 
         procedure   $STD_AUX_INPUT,NEAR   ; System call 3
-	PUSH	BX
 	MOV	BX,3
 	XOR	AX,AX
 	CALL	IO_COMMON
-	POP	BX
 	return
 $STD_AUX_INPUT ENDP
 
         procedure   $STD_AUX_OUTPUT,NEAR   ; System call 4
-	PUSH	BX
 	MOV	BX,3
 	MOV	AH,2
 	MOV	AL,DL
 	CALL	IO_COMMON
-	POP	BX
 	return
 $STD_AUX_OUTPUT ENDP
 
         procedure   $STD_PRINTER_OUTPUT,NEAR   ; System call 5
-	PUSH	BX
 	MOV	BX,4
 	MOV	AH,2
 	MOV	AL,DL
 	CALL	IO_COMMON
-	POP	BX
 	return
 $STD_PRINTER_OUTPUT ENDP
 
         procedure   $STD_CON_INPUT_NO_ECHO,NEAR   ; System call 8
-	PUSH	BX
 	XOR	BX,BX
 	XOR	AX,AX
 	CALL	IO_COMMON
-	POP	BX
 	return
 $STD_CON_INPUT_NO_ECHO ENDP
 
         procedure   $STD_CON_STRING_OUTPUT,NEAR   ; System call 9
-	PUSH	SI
-	PUSH	BX
 	MOV	SI,DX
 STROUT_LOOP:
 	CLD
@@ -194,15 +182,10 @@ STROUT_LOOP:
 	CALL	OUT
 	JMP	STROUT_LOOP
 STROUT_END:
-	POP	BX
-	POP	SI
 	return
 $STD_CON_STRING_OUTPUT ENDP
 
         procedure   $STD_CON_INPUT_STATUS,NEAR   ; System call 11
-	PUSH	DS
-	PUSH	SI
-	PUSH	BX
 	invoke	STATCHK
 	XOR	BX,BX
         invoke  GET_IO_FCB
@@ -214,9 +197,6 @@ $STD_CON_STRING_OUTPUT ENDP
 	JZ	INSTAT_NO
 	MOV	AL,0FFH
 INSTAT_NO:
-	POP	BX
-	POP	SI
-	POP	DS
 	return
 $STD_CON_INPUT_STATUS ENDP
 
@@ -230,22 +210,11 @@ a:
 ENDM
 
         procedure   $STD_CON_INPUT_FLUSH,NEAR   ; System call 12
-	PUSH	AX
-	PUSH	BX
-	PUSH	DS
-	PUSH	SI
 	XOR	BX,BX
         invoke  GET_IO_FCB
-	JC	FLUSH_ERROR
+	JC	FLUSH_RET
 	MOV	AH,4
         invoke  IOFUNC
-	CLC
-FLUSH_ERROR:
-	POP	SI
-	POP	DS
-	POP	BX
-	POP	AX
-	JC	FLUSH_RET
 	TransferIf 1,$STD_CON_INPUT
 	TransferIf 6,$RAW_CON_IO
 	TransferIf 7,$RAW_CON_INPUT
