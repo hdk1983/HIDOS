@@ -40,6 +40,8 @@ INCLUDE DOSSYM.ASM
 	I_NEED INBUF,128
 	I_NEED INSMODE,BYTE
 	I_NEED ESCCHAR,BYTE
+	I_NEED CHARCO,BYTE
+	I_NEED PFLAG,BYTE
 
 	INCLUDE	STRIN.ASM
 
@@ -47,6 +49,7 @@ entry	BUFOUT
 ; called by STRIN.ASM and CTRLC.ASM with following comments:
 ; - "Print control chars nicely" (STRIN.ASM)
 ; - "Display "^C"" (CTRLC.ASM)
+	;; Looks like same algorithm as v1.25/source/MSDOS.ASM
 	CMP	AL,' '
 	JNB	OUT
 	CMP	AL,c_HT
@@ -64,14 +67,65 @@ entry	OUT
 	;; which calls this in case of cooked CON only.
 	;; Output with AH=02H or AH=09H calls this
 	;; even if output is redirected...
+	;; Reference: v1.25/source/MSDOS.ASM
+	CMP	AL,' '
+	JB	CTRLOUT
+	CMP	AL,7FH
+	JE	OUTCH
+OUT_CHAR:
+	INC	[CARPOS]
+OUTCH:
+	PUSH	DS
+	PUSH	SI
+	PUSH	AX
+	;; Probably CHARCO is used differently from other MSDOS.SYS
+	SUB	[CHARCO],10H
+	JNB	SKIPSTAT
+	invoke	STATCHK
+	MOV	AL,[CHARCO]
+	MOV	AH,AL
+	AND	AL,0FH
+	SHL	AH,1
+	SHL	AH,1
+	SHL	AH,1
+	SHL	AH,1
+	OR	AL,AH
+	MOV	[CHARCO],AL
+SKIPSTAT:
+	POP	AX
+	invoke	RAWOUT
+	CMP	[PFLAG],0
+	JNE	OUTPRN
+OUTRET:
+	POP	SI
+	POP	DS
+	RET
+OUTPRN:
+	PUSH	BX
+	PUSH	AX
+	MOV	BX,4
+        invoke  GET_IO_FCB
+	POP	AX
+	JC	OUTPRNERR
+OUTPRNLOOP:
+	MOV	AH,3
+        invoke  IOFUNC
+	JNZ	OUTPRNOK
+        invoke  SPOOLINT
+	JMP	OUTPRNLOOP
+OUTPRNOK:
+	MOV	AH,2
+        invoke  IOFUNC
+OUTPRNERR:
+	POP	BX
+	JMP	OUTRET
+CTRLOUT:
 	CMP	AL,c_CR
-	JE	OUT_CR
+	JE	ZERPOS
 	CMP	AL,c_BS
-	JE	OUT_BS
-	CMP	AL,c_LF
-	JE	OUT_LF
+	JE	BACKPOS
 	CMP	AL,c_HT
-	JNE	OUT_CHAR
+	JNE	OUTCH
 entry	TAB
 ; called by PUTNEW in STRIN.ASM.
 	MOV	AL,' '
@@ -79,20 +133,12 @@ entry	TAB
 	TEST	[CARPOS],7
 	JNE	TAB
 	RET
-OUT_CR:
-	MOV	[CARPOS],1
-OUT_BS:
+ZERPOS:
+	MOV	[CARPOS],0
+	JMP	OUTCH
+BACKPOS:
 	DEC	[CARPOS]
-	JMP	SHORT OUT_LF
-OUT_CHAR:
-	INC	[CARPOS]
-OUT_LF:
-	PUSH	DS
-	PUSH	SI
-	invoke	RAWOUT
-	POP	SI
-	POP	DS
-	RET
+	JMP	OUTCH
 
 ; Use the same way as $RAW_CON_INPUT and RAWNORM.
 IO_COMMON:
