@@ -113,7 +113,14 @@ IO_COMMON_STAT:
 	INC	AH
         invoke  IOFUNC
 	JZ	IO_COMMON_LOOP
+	invoke	STATCHK
 	POP	AX
+	POP	BX
+	PUSH	BX
+	PUSH	AX
+        invoke  GET_IO_FCB
+	POP	AX
+	JC	IO_COMMON_ERROR
         invoke  IOFUNC
 	CLC
 IO_COMMON_ERROR:
