@@ -390,8 +390,6 @@ EXITP   ENDP
         PAGE
         SUBTTL  Main console I/O section.
 
-CHAR    DB      ?               ;Small typeahead buffer for now.
-CHAR2	DB	?
 	; Table from DOSMES.ASM except *F8
 	; Must be sorted by key code
 KEYCODELIST LABEL BYTE
@@ -422,30 +420,52 @@ KEYCODELIST LABEL BYTE
 	DB	255			; End
 	DB	"R"			;
 
+;;; Default is that function keys are converted to escape sequences.
+;;; PC DOS compatible mode is that they are NUL and key code sequences.
+;;; ESC F10 switches the mode.
+CON_BUF	DB	0		; Length
+	DB	?		; Buffer
+	DB	27		; ESC or NUL
+
 ;
 ; Console keyboard handler.
 ;
 
-CISTAT: PUSH    CX              ;Save CX pair.
-        MOV     AL,[CHAR]
-        OR      AL,AL
-        JNZ     CISTA9          ;Character still in buffer.
-	MOV	AL,[CHAR2]
+CISTAT:
+	MOV	BX,OFFSET CON_BUF
+	MOV	AL,[BX]
 	TEST	AL,AL
-	JE	CISTA1
-	MOV	[CHAR],AL
-	MOV	[CHAR2],0
-        JNZ     CISTA9          ;Character still in buffer.
-CISTA1:
+	JE	CISTAT_EMPTY
+CISTAT_XLAT:			; ZF=0
+	XLAT
+CISTAT_RET:
+        RET
+CISTAT_EMPTY:
 	MOV	AH,1
 	INT	16H
-        JZ      CISTA9
+	JE	CISTAT_RET	; ZF=1
 	MOV	AH,0
 	INT	16H
-	MOV	[CHAR],AL
 	TEST	AL,AL
-	JNE	CISTA9
-	PUSH	BX
+	JE	CISTAT_2BYTE
+	;; 1-byte ZF=0
+	MOV	BYTE PTR [BX],1
+	MOV	[BX+1],AL
+	RET
+CISTAT_2BYTE:
+	CMP	AH,68		; F10
+	JNE	CISTAT_NOTTOGGLE
+	CMP	BYTE PTR [BX+1],27 ; ESC
+	JNE	CISTAT_NOTTOGGLE
+	;; Toggle mode
+	MOV	AL,27
+	XOR	BYTE PTR [BX+2],AL ; Switch mode
+	INC	BYTE PTR [BX]	; ZF=0
+	RET
+CISTAT_NOTTOGGLE:
+	CMP	BYTE PTR [BX+2],AL
+	JE	CISTAT_KEYCODEMODE
+	;; Key code conversion: ESC, alphabet
 	MOV	BX,OFFSET KEYCODELIST-2
 CISTAT_LOOP:
 	INC	BX
@@ -453,15 +473,16 @@ CISTAT_LOOP:
 	CMP	AH,[BX]
 	JB	CISTAT_NOT_MATCH
 	JNE	CISTAT_LOOP
-	MOV	AL,[BX+1]
-	MOV	[CHAR2],AL
-	MOV	AL,27		; ESC
-	MOV	[CHAR],AL
-	TEST	AL,AL
+	MOV	AH,[BX+1]
+	MOV	BX,OFFSET CON_BUF
+CISTAT_KEYCODEMODE:
+	;; PC DOS compatible: NUL, keycode
+	OR	AL,2		; ZF=0
+	MOV	[BX],AX		; Second byte
+	JMP	CISTAT_XLAT
 CISTAT_NOT_MATCH:
-	POP	BX
-CISTA9: POP     CX              ;Can't lose CX pair.
-        RET
+	TEST	AL,AL		; ZF=1
+	JMP	CISTAT_RET
 
 ;
 ; Get a character from the buffer queue.
@@ -469,7 +490,7 @@ CISTA9: POP     CX              ;Can't lose CX pair.
 
 CINP:   CALL    CISTAT          ;Check for character ready in queue.
         JZ      CINP            ;Cycle until one ready.
-        MOV     [CHAR],0        ;We have character in AL, clear type a head.
+	DEC	BYTE PTR [BX]
         RET
 
 ;
@@ -501,8 +522,7 @@ CON_READ:
 ;
 
 CON_FLSH:
-        MOV     [CHAR],0        ;Clear small type a head buffer.
-	MOV	[CHAR2],0
+	MOV	BYTE PTR [CON_BUF],0
         JMP     EXIT
 
 ;

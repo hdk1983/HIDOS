@@ -26,6 +26,38 @@ Disk space more than a floppy disk is needed, but current `PC_IO.SYS` does not s
 Using the HIDOS virtual machine is easy.
 Especially, the hidoskvm is fast.
 
+## IO.SYS
+
+The build process generates the following IO.SYS binaries:
+
+- `SKELIO.SYS`
+- `PC_IO.SYS` (`PC_IO.EXE`)
+- `VM_IO.SYS`
+- `DOS_IO.EXE`
+
+`SKELIO.SYS` is skeltal BIOS for the ALTOS ACS-86C.
+Not tested.
+
+`PC_IO.SYS` is BIOS for IBM PC compatible.
+It can be booted by `PC_BOOT.BIN` boot code only.
+`PC_IO.EXE` is for debugging.
+Keyboard input routine converts function keys ans arrow keys to 2-byte escape sequences handled by DOSMES.ASM which says them as "VT52 equivalences" by default.
+Maybe applications expect PC DOS compatible input -- 1st byte is NUL and 2nd byte is PC key code.
+The BIOS also supports the PC DOS compatible mode.
+Typing ESC F10 toggles the mode.
+
+`VM_IO.SYS` is BIOS for the HIDOS virtual machine.
+The virtual machine loads it directly from a file system.
+Keyboard input is not converted.
+Since VT100 escape sequences are different from the "VT52 equivalences", input escape sequence directly for line editing, like M-U (ESC U) for copy line, M-S (ESC S) for copy one char, etc.
+
+`DOS_IO.EXE` is BIOS for MS-DOS -- DOS on DOS.
+Instead of calling ROM BIOS or accessing devices directly, it calls the host DOS system.
+It can use disk image files for drives.
+`MSDOS.SYS` is loaded on the host too.
+At least one FAT12 file system image or disk which contains `COMMAND.COM` is needed.
+It works on 32-bit Windows command prompt, MS-DOS, DOSBox and FreeDOS.
+
 ## Boot on PC
 
 ### Starting From Existing DOS (for Debugging)
