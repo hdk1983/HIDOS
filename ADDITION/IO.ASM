@@ -266,18 +266,22 @@ a:
 ENDM
 
         procedure   $STD_CON_INPUT_FLUSH,NEAR   ; System call 12
+	PUSH	DS
 	XOR	BX,BX
         invoke  GET_IO_FCB
 	JC	FLUSH_RET
 	MOV	AH,4
         invoke  IOFUNC
+	POP	DS
 	TransferIf 1,$STD_CON_INPUT
 	TransferIf 6,$RAW_CON_IO
 	TransferIf 7,$RAW_CON_INPUT
 	TransferIf 8,$STD_CON_INPUT_NO_ECHO
 	TransferIf 10,$STD_CON_STRING_INPUT
 	CLC
+	return
 FLUSH_RET:
+	POP	DS
 	return
 $STD_CON_INPUT_FLUSH ENDP
 
