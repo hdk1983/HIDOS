@@ -218,10 +218,13 @@ $STD_AUX_OUTPUT ENDP
 	return
 $STD_PRINTER_OUTPUT ENDP
 
+;;; BX must be saved for internal calls from STRIN.ASM.
         procedure   $STD_CON_INPUT_NO_ECHO,NEAR   ; System call 8
+	PUSH	BX
 	XOR	BX,BX
 	XOR	AX,AX
 	CALL	IO_COMMON
+	POP	BX
 	return
 $STD_CON_INPUT_NO_ECHO ENDP
 
