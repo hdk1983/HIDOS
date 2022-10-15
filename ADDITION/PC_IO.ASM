@@ -1095,24 +1095,19 @@ TIM_RED1:
 ;
 ; MSDOS drive initialization tables and other what not.
 ;
-;  Drive 0 is:
-;    Double sided, double density,
-;    80x2 track with 9 512 byte sectors per track (720 KiB)
-;    ,,512,2,1,2,112,1440,0F9H,3,9
-;  or
-;    Double sided, double density,
-;    80x2 track with 19 512 byte sectors per track (1440 KiB)
-;    ,,512,1,1,2,224,2880,0F0H,9,18
-;  or
-;    Double sided, double density,
-;    77x2 track with 8 1024 byte sectors per track (1232 KiB)
-;    ,,1024,1,1,2,192,1232,0FEH,2,8
-;
+;;; Supported format list:
+;;; ID sector-size cyl spt head  (JX Japanese DOS FORMAT.COM switch)
+;;; FF         512  40   8    2  /4 /8
+;;; FE         512  40   8    1  /4 /8 /1
+;;; FD         512  40   9    2  /4                 - PCjr PC DOS default
+;;; FC         512  40   9    1  /4    /1
+;;; FB         512  80   8    2     /8
+;;; FA         512  80   8    1     /8 /1
+;;; F9         512  80   9    2                     - JX Japanese DOS default
+;;; F8         512  80   9    1        /1
+;;; F0         512  80  18    2  ---                - PS/2, the standard
 
-DBP     STRUC
-
-JMPNEAR DB      3 DUP (?)       ;Jmp Near xxxx  for boot.
-NAMEVER DB      8 DUP (?)       ;Name / Version of OS.
+DPB     STRUC
 
 ;-------  Start of Drive Parameter Block.
 
@@ -1130,11 +1125,21 @@ FATSEC  DW      ?               ;Number of FAT Sectors.                 (dpb)
 SECTRK  DW      ?               ;Number of Sectors per track.
 NHEADS	DW	?		;Number of heads
 
-DBP     ENDS
+DPB     ENDS
 
-LDDRIV1 DBP     <,,512,2,1,2,112,1440,0F9H,3,9,2>
-LDDRIV2	DBP	<,,512,1,1,2,224,2880,0F0H,9,18,2>
-LDDRIV3 DBP	<,,1024,1,1,2,192,1232,0FEH,2,8,2>
+DPBLIST	LABEL	DPB
+	DPB	<512,1,1,2,224,2880,0F0H,9,18,2>
+	DPB	<512,2,1,2,112,640,0FFH,1,8,2>
+	DPB	<512,1,1,2,64,320,0FEH,1,8,1>
+	DPB	<512,2,1,2,112,720,0FDH,2,9,2>
+	DPB	<512,1,1,2,64,360,0FCH,2,9,1>
+	DPB	<512,2,1,2,112,1280,0FBH,2,8,2>
+	DPB	<512,2,1,2,112,640,0FAH,1,8,1>
+	DPB	<512,2,1,2,112,1440,0F9H,3,9,2>
+	DPB	<512,2,1,2,112,720,0F8H,2,9,1>
+
+DPBINDEX DB	1,2,3,4,5,6,7,8,-1,-1,-1,-1,-1,-1,-1,0
+DPBINDEXEND LABEL BYTE
 
 DSK_INIT:
 	MOV     AX,1
@@ -1143,10 +1148,10 @@ DSKNUNT	EQU	$-2
         JMP     GET_BP5
 
 INITTAB:
-        DW      LDDRIV3.SECSIZE
-        DW      LDDRIV3.SECSIZE
-        DW      LDDRIV3.SECSIZE
-        DW      LDDRIV3.SECSIZE
+	DW	DPBLIST
+	DW	DPBLIST
+	DW	DPBLIST
+	DW	DPBLIST
 DRVFLG	DB	0
 
         PAGE
@@ -1271,29 +1276,40 @@ GET_BPB_ALOK:
 	POP	DI
         POP     ES
 	JC	DISKERR
+GET_BP1:MOV     AL,ES:[DI+11+MEDIAID] ;Get diskettes media ID.
+	TEST	AL,AL
+	JNE	GET_BP2
+	;; Old format might not have the DPB.
+	PUSH    ES
+	PUSH	DI
+	INC	CX
+	MOV	AX,201H
+	CALL	DISKBIOS
+	POP	DI
+	POP	ES
+	JC	DISKERR
+	MOV	AL,ES:[DI]	; Media ID in the FAT first byte
+GET_BP2:
+	MOV	AH,1
+	MOV	SI,OFFSET DPBLIST
+	NOT	AL
+	CMP	AL,OFFSET DPBINDEXEND-OFFSET DPBINDEX
+	JAE	GET_BP4
+	MOV	BX,OFFSET DPBINDEX
+	XLAT
+	TEST	AL,AL
+	JS	GET_BP4
+	MOV	AH,SIZE DPB
+	MUL	AH
+	ADD	SI,AX
 	XOR	AX,AX
-
-GET_BP1:MOV     AL,ES:[DI.MEDIAID] ;Get diskettes media ID.
-        MOV     SI,OFFSET LDDRIV1
-        CMP     AL,[SI.MEDIAID]
-        JZ      GET_BP4
-        MOV     SI,OFFSET LDDRIV2
-        CMP     AL,[SI.MEDIAID]
-        JZ      GET_BP4
-	MOV	SI,OFFSET LDDRIV3
-	CMP	AL,[SI.MEDIAID]
-	JZ	GET_BP4
-
-GET_BP3:MOV     SI,OFFSET LDDRIV3
-
 GET_BP4:MOV     AL,[SI.MEDIAID]
-        ADD     SI,11           ;Convert to DPB pointer
 
 GET_BP5:LDS     BX,[PTRSAV]     ;Update I/O data packet.
         MOV     [BX.BPB1],AL    ;Media byte.
         MOV     [BX.BPB3],SI    ;DPB pointer.
         MOV     [BX.BPB3+2],CS  ;Code segment.
-	OR	AH,AH
+	TEST	AH,AH
 	JNZ	GET_BP6
 	MOV	AL,0
 	JMP     EXIT
@@ -1338,25 +1354,26 @@ DSK_RED:
 DSK_WRV:
 DSK_WRT:MOV	BL,3
 
-DSK_COM:MOV     SI,OFFSET LDDRIV1
+DSK_COM:
 	CMP	AL,BYTE PTR [DSKNUNT]
 	JB	DSK_COM_ALOK
 	JMP	BADRIV
 DSK_COM_ALOK:
-        CMP     AH,[SI.MEDIAID]
-        JE      DSK_CO2
-        MOV     SI,OFFSET LDDRIV2
-        CMP     AH,[SI.MEDIAID]
-        JE      DSK_CO2
-        MOV     SI,OFFSET LDDRIV3
-        CMP     AH,[SI.MEDIAID]
-        JE      DSK_CO2
-        MOV     AL,7
-        JMP     ERR_EXIT
-
-DSK_CO2:
-
-DSK_CO3:
+	MOV	SI,AX
+	MOV	AL,AH
+	NOT	AL
+	CMP	AL,OFFSET DPBINDEXEND-OFFSET DPBINDEX
+	JAE	GET_BP6
+	PUSH	BX
+	MOV	BX,OFFSET DPBINDEX
+	XLAT
+	POP	BX
+	TEST	AL,AL
+	JS	GET_BP6
+	MOV	AH,SIZE DPB
+	MUL	AH
+	ADD	AX,OFFSET DPBLIST
+	XCHG	AX,SI
 	PUSH	AX
 	PUSH	DI
 	SHR	DI,1
@@ -1410,7 +1427,11 @@ DISKRW:
 	SHR	AX,1
 	OR	CL,AL
 	MOV	DL,[BP+10]	; Drive
+	CMP	[SI.MEDIAID],0FCH
+	JAE	CYL40
+	;; 80 track access needs bit 6 = 1 for JX
 	OR	DL,[DRVFLG]
+CYL40:
 	MOV	AX,[BP+6]	; Number of sectors
 	CMP	AX,BX
 	JB	DISKRW_NSECOK
@@ -1669,11 +1690,20 @@ USEDMA:
 	MOV	SP,DI
 	XOR	BP,BP
 	MOV	SI,OFFSET MSDOS_FILENAME
+	PUSH	DX
+	TEST	DL,40H
+	JE	DLOK
+	CMP	BYTE PTR [BP+11+10],0FCH ; Media ID
+	JB	DLOK
+	;; Booting 40 track disk on JX
+	XOR	DL,40H
+DLOK:
 	JMP	RDR_START
 FILENOTFOUND:
 	MOV	SI,OFFSET FILEERR
 	JMP	ERRSTOP
 	INCLUDE	FIL_RDR.ASM
+	POP	DX
 	MOV	[DOSSEG_SAVE],ES
 	;; Stack at the end of the DOS will be used until the SYSINIT
 	;; moves the DOS to the FINAL_DOS_LOCATION.

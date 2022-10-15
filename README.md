@@ -39,6 +39,7 @@ The build process generates the following IO.SYS binaries:
 Not tested.
 
 `PC_IO.SYS` is BIOS for IBM PC compatible.
+It is expected to work on PCjr compatible and JX too.
 It can be booted by `PC_BOOT.BIN` boot code only.
 `PC_IO.EXE` is for debugging.
 Keyboard input routine converts function keys ans arrow keys to 2-byte escape sequences handled by DOSMES.ASM which says them as "VT52 equivalences" by default.
