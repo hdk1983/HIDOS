@@ -10,7 +10,7 @@ are implemented:
   only.
 
 This virtual machine is NOT compatible with PC.  On this virtual
-machine, PC_IO.SYS does not work.  Only VM_IO.SYS works.
+machine, PC_IO.EXE does not work.  Only VM_IO.SYS works.
 
 -------
 Build

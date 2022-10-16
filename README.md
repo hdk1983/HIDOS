@@ -22,7 +22,7 @@ See cross/HOWTO.md for cross build details.
 ## Build on MS-DOS 2.11
 
 If the MS-DOS has been built successfully, you can build MS-DOS on itself.
-Disk space more than a floppy disk is needed, but current `PC_IO.SYS` does not support hard drives.
+Disk space more than a floppy disk is needed, but current `PC_IO.EXE` does not support hard drives.
 Using the HIDOS virtual machine is easy.
 Especially, the hidoskvm is fast.
 
@@ -31,17 +31,17 @@ Especially, the hidoskvm is fast.
 The build process generates the following IO.SYS binaries:
 
 - `SKELIO.SYS`
-- `PC_IO.SYS` (`PC_IO.EXE`)
+- `PC_IO.EXE`
 - `VM_IO.SYS`
 - `DOS_IO.EXE`
 
 `SKELIO.SYS` is skeltal BIOS for the ALTOS ACS-86C.
 Not tested.
 
-`PC_IO.SYS` is BIOS for IBM PC compatible.
+`PC_IO.EXE` is BIOS for IBM PC compatible.
 It is expected to work on PCjr compatible and JX too.
-It can be booted by `PC_BOOT.BIN` boot code only.
-`PC_IO.EXE` is for debugging.
+It can be booted by `PC_BOOT.BIN` boot code only since it is relocatable binary including MZ header.
+Since JX Japanese BIOS uses some additional memory space, the address for IO.SYS drivers is fixed during boot process.
 Keyboard input routine converts function keys ans arrow keys to 2-byte escape sequences handled by DOSMES.ASM which says them as "VT52 equivalences" by default.
 Maybe applications expect PC DOS compatible input -- 1st byte is NUL and 2nd byte is PC key code.
 The BIOS also supports the PC DOS compatible mode.
@@ -88,7 +88,7 @@ A>DEBUG PC_BOOT.BIN
 -Q
 ```
 
-Then rename `PC_IO.SYS` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to the disk.
+Then rename `PC_IO.EXE` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND.COM` to the disk.
 
 The boot code is probably not compatible with other DOS.
 It loads `IO.SYS` only, then `IO.SYS` loads `MSDOS.SYS`.

@@ -48,27 +48,70 @@ EXTRN   DEFAULT_DRIVE:BYTE            ;Default Drive to use when system booted
 EXTRN   BUFFERS:BYTE                  ;Number of default buffers.
                                       ; Leave as is and SYSINIT uses only 2.
 
+RELOC	SEGMENT
+RELOC	ENDS
+
 CODE    SEGMENT
 CODE    ENDS
-
-STACK	SEGMENT
-	DB	128 DUP (?)
-STACKEND LABEL WORD
-STACK	ENDS
 
 SYSINITSEG      SEGMENT PUBLIC 'SYSTEM_INIT'
 SYSINITSEG      ENDS
 
+STACK	SEGMENT STACK 'STACK'
+STACKSIZE EQU 128
+	DB	STACKSIZE DUP (?)
+STACK	ENDS
+
 LAST	SEGMENT PUBLIC 'LAST'
 LAST	ENDS
+
+SEG_PC	EQU	80H		; CODE segment address on PC
+SEG_JA	EQU	200H		; CODE segment address on JX Japanese mode
+
+RELOC	SEGMENT
+	ORG	0
+	;; The PC_BOOT.BIN jumps to here.
+	;; MZ header is at DS:0.
+	;; Relocate to the address that IO.SYS will stay at.
+	;; The address might be different from loaded address.
+	ASSUME	CS:RELOC
+RELOCPR	PROC	FAR
+	MOV	AX,SEG_PC
+	TEST	DL,40H
+	JE	NOTJ
+	MOV	AX,SEG_JA
+NOTJ:
+	SUB	AX,CODE		; This CODE value is not relocated yet!
+	XOR	BX,BX
+	CMP	WORD PTR DS:[BX],'M' OR ('Z' SHL 8)
+	JNE	$		; Sanity check
+	MOV	CX,DS:[BX+6]	; Number of relocation
+	JCXZ	$		; Sanity check
+	MOV	SI,DS:[BX+18H]	; Relocation table offset
+	MOV	BX,CS		; Loaded segment (DS+header size)
+RELOC_LOOP:
+	ADD	DS:[SI+2],BX
+	LES	DI,DWORD PTR DS:[SI]
+	ADD	ES:[DI],AX
+	ADD	SI,4
+	LOOP	RELOC_LOOP
+	;; Relocation has been completed.
+	;; Jump to the initialization code.
+	MOV	AX,CS
+	SUB	AX,RELOC
+	ADD	AX,CODE
+	PUSH	AX
+	MOV	AX,OFFSET CODE:HWINIT2
+	PUSH	AX
+	RET
+RELOCPR	ENDP
+RELOC	ENDS
 
 CODE    SEGMENT
 ASSUME  CS:CODE,DS:NOTHING,ES:NOTHING,SS:NOTHING
 BIOSSEG	EQU	CODE
 
         ORG     0               ;Starts at an offset of zero.
-
-INIT:   JMP     HWINIT
 
         PAGE
 
@@ -1425,8 +1468,8 @@ DISKRW_ERR:
 	RET
 DISKRW_BHIT:
 	LEA	SP,[BP-10]
-	;; Normally this module is loaded into segment 200H, segment
-	;; 1E0H for 512 byte sector is available for temporary use.
+	;; Normally this module is loaded into segment 80H, segment
+	;; 60H for 512 byte sector is available for temporary use.
 	PUSH	AX
 	MOV	AX,[SI.SECSIZE]
 	PUSH	AX
@@ -1551,13 +1594,15 @@ FILEERR	LABEL BYTE
 MSDOS_FILENAME DB 'MSDOS   SYS'
 	DB	' NOT FOUND',0
 NOFDD	DB	'NO FDD',0
-DOSSEG_SAVE DW ?
-DMAFLAG	DB	0
 
 ;;; DMA boundary test and read
 BTESTREAD PROC NEAR
+	MOV	AX,SEG_JA-1
+	CMP	AX,CODE
+	JB	SKIP_DMATEST
 	INT	12H
 	CMP	AX,64
+SKIP_DMATEST:
 	MOV	AX,201H
 	JB	DISKBIOSNOERR
 	PUSH	ES
@@ -1582,7 +1627,7 @@ BTESTREAD PROC NEAR
 BTESTREAD_ERROR:
 	CMP	AH,9
 	JNE	DISKBIOSERR
-	MOV	[DMAFLAG],1
+	MOV	[DRVDMA],0A9H	; TEST AX,immediate
 	MOV	AX,201H
 BTESTREAD ENDP
 	;; Fall through
@@ -1611,24 +1656,13 @@ GETSEGDIFF PROC NEAR
 GETSEGDIFF ENDP
 
 HWINIT:
+	;; For debugging: EXE is runnable from DOS
+	XOR	DX,DX
+HWINIT2:
 	CALL	GETSEGDIFF
 	ADD	AX,STACK
 	MOV	SS,AX
-	MOV	SP,OFFSET STACKEND
-
-	;; For debugging: EXE is runnable from DOS
-	MOV	AX,CS
-	MOV	BX,DS
-	SUB	AX,BX
-	CMP	AX,10H
-	JNE	NOTDEBUG
-	MOV	AX,ES
-	SUB	BX,AX
-	JNE	NOTDEBUG
-	CMP	[BX],20CDH
-	JNE	NOTDEBUG
-	XOR	DX,DX
-NOTDEBUG:
+	MOV	SP,STACKSIZE
 
 	;; Load MSDOS
 	CALL	GETSEGDIFF
@@ -1639,10 +1673,6 @@ NOTDEBUG:
 	MOV	CX,1
 	MOV	DH,0
 	CALL	BTESTREAD
-	CMP	[DMAFLAG],DH
-	JNE	USEDMA
-	MOV	[DRVDMA],0A9H	; TEST AX,immediate
-USEDMA:
 	MOV	DI,ES:[DI+11]	; BPB Sector size
 	MOV	SS,BP
 	MOV	SP,DI
@@ -1662,12 +1692,11 @@ FILENOTFOUND:
 	JMP	ERRSTOP
 	INCLUDE	FIL_RDR.ASM
 	POP	DX
-	MOV	[DOSSEG_SAVE],ES
 	;; Stack at the end of the DOS will be used until the SYSINIT
 	;; moves the DOS to the FINAL_DOS_LOCATION.
 	PUSH	ES
 	POP	SS
-	LEA	SP,[DI+OFFSET STACKEND]
+	LEA	SP,[DI+STACKSIZE]
 
 	CLD
 	MOV	AX,CODE
@@ -1785,8 +1814,7 @@ ASSUME  DS:SEG SYSINIT
 	INC	DL		; looks like starting from 1
 	MOV	DS:[DEFAULT_DRIVE],DL
 
-	MOV	AX,[DOSSEG_SAVE]
-        MOV     DS:[CURRENT_DOS_LOCATION],AX
+        MOV     DS:[CURRENT_DOS_LOCATION],SS
 
 	LEA	AX,[DI+15]
 	MOV	CL,4
@@ -1806,4 +1834,4 @@ GOTO	ENDP
 
 CODE    ENDS
 
-        END
+        END	HWINIT

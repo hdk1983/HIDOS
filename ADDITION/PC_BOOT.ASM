@@ -166,11 +166,20 @@ FILENOTFOUND:
 	JMP	ERRSTOP
 	INCLUDE	FIL_RDR.ASM
 	PUSH	ES		; Avoid debugging detection
-	POP	DS
-	XOR	AX,AX
+	POP	DS		; and for relocation
+	XOR	BX,BX
 	POP	DX
 	PUSH	ES
+	CMP	DS:[BX],'M' OR ('Z' SHL 8)
+	JNE	NOTR
+	;; Relocatable IO.SYS!
+	;; Jump to the paragraph just after the header.
+	;; Relocation will be done in IO.SYS.
+	POP	AX
+	ADD	AX,DS:[BX+8]	; Header size in paragraph
 	PUSH	AX
+NOTR:
+	PUSH	BX
 GOTO	PROC	FAR
 	RET
 GOTO	ENDP
