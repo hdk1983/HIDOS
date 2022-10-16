@@ -104,48 +104,6 @@ INIT:   JMP     HWINIT
 ;         the first byte.                       ;
 ;-----------------------------------------------+
 
-DEVSTART LABEL WORD
-CONDEV:                         ;Header for device CON
-        DW      AUXDEV,BIOSSEG  ;Link to next device
-IF ANSI
-        DW      8003H           ;Attributes - console input, output device
-ENDIF
-IFE ANSI
-	DW	8013H		; and SPECIAL
-ENDIF
-        DW      STRATEGY        ;Srategy entry point
-        DW      CON_INT         ;Interrupt entry point
-        DB      "CON     "      ;Device name
-
-AUXDEV:                         ;Header for device AUX
-        DW      PRNDEV,BIOSSEG
-        DW      8000H
-        DW      STRATEGY
-        DW      AUX_INT
-        DB      "AUX     "
-
-PRNDEV:                         ;Header for device PRN
-        DW      TIMDEV,BIOSSEG
-        DW      8000H
-        DW      STRATEGY
-        DW      PRN_INT
-        DB      "PRN     "
-
-TIMDEV:                         ;Header for device CLOCK
-        DW      DSKDEV,BIOSSEG
-        DW      8008H
-        DW      STRATEGY
-        DW      TIM_INT
-        DB      "CLOCK   "
-
-DSKDEV:                         ;Header for disk devices
-        DW      -1,-1           ;Last device
-        DW      2000H           ;Is a block device
-        DW      STRATEGY
-        DW      DSK_INT
-DRVMAX  DB      1               ;Number of Units
-        DB      7 DUP (?)
-
         PAGE
         SUBTTL  Dispatch tables for each device.
 
@@ -1584,7 +1542,7 @@ DERROR: LDS     BX,CS:[PTRSAV]
 ;
 ; Overlayed by MSDOS by SYSINIT.
 ;
-DRVEND	LABEL	BYTE
+DEVSTART LABEL WORD
 	ASSUME	DS:NOTHING
 
 MEMERR	DB	'LOAD ADDRESS ERROR',0
@@ -1726,7 +1684,7 @@ SEGMOVE:
 	MOV	DS,BX
 	XOR	SI,SI
 	XOR	DI,DI
-	MOV	CX,OFFSET DRVEND
+	MOV	CX,OFFSET DEVSTART
 	REP	MOVSB
 SEGOK:
 	;; Save 80 tracks per side flag of JX
@@ -1739,12 +1697,67 @@ SEGOK:
 	JC	YESFDD
 	MOV	SI,OFFSET NOFDD
 	JMP	ERRSTOP
+	;; Compressed device driver list
+DEVS	LABEL	BYTE
+IF ANSI
+        DW      8003H           ;Attributes - console input, output device
+ENDIF
+IFE ANSI
+	DW	8013H		; and SPECIAL
+ENDIF
+        DW      CON_INT         ;Interrupt entry point
+	DB	'CON '
+        DW      8000H
+        DW      AUX_INT
+	DB	'AUX '
+        DW      8000H
+        DW      PRN_INT
+	DB	'PRN '
+        DW      8008H
+        DW      TIM_INT
+	DB	'CLOCK '
+        DW      2000H           ;Is a block device
+        DW      DSK_INT
+	DB	4,' '
+NDEVS	EQU	5
 YESFDD:
 	MOV	CL,5
 	SHR	AL,CL
 	ADD	BYTE PTR ES:[DSKNUNT],AL
 
-	ASSUME	ES:NOTHING
+	;; Create device driver tables.
+	PUSH	CS
+	POP	DS
+	ASSUME	DS:CODE
+	MOV	SI,OFFSET DEVS
+	MOV	DI,OFFSET DEVSTART
+	MOV	CX,NDEVS
+DEVSLP:
+	CMP	CX,2
+	SBB	BX,BX
+	LEA	AX,[DI+18]	; Next entry offset
+	OR	AX,BX		; -1 for last entry
+	STOSW			; Link offset
+	MOV	AX,ES
+	OR	AX,BX
+	STOSW			; Link segment
+	MOVSW			; Attributes
+	MOV	AX,OFFSET STRATEGY
+	STOSW			; Srategy entry point
+	MOVSW			; Interrupt entry point
+	LEA	BX,[DI+8]	; Next entry offset
+DEVSNL:
+	LODSB
+DEVSFL:
+	STOSB
+	CMP	AL,' '
+	JNE	DEVSNL		; Copy name
+	CMP	DI,BX
+	JB	DEVSFL		; Fill space
+	MOV	DI,BX		; Move back if name is 8-byte long.
+	LOOP	DEVSLP
+
+	ASSUME	DS:NOTHING,ES:NOTHING
 
 IFE ANSI
 	;; CON SPECIAL support
@@ -1775,8 +1788,10 @@ ASSUME  DS:SEG SYSINIT
 	MOV	AX,[DOSSEG_SAVE]
         MOV     DS:[CURRENT_DOS_LOCATION],AX
 
-	MOV	AX,CODE
-	ADD	AX,((OFFSET DRVEND - OFFSET INIT) + 15) / 16
+	LEA	AX,[DI+15]
+	MOV	CL,4
+	SHR	AX,CL
+	ADD	AX,CODE
         MOV     DS:[FINAL_DOS_LOCATION],AX
 
         MOV     WORD PTR DS:[DEVICE_LIST+2],CODE
