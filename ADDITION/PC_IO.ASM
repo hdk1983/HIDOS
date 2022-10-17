@@ -164,19 +164,19 @@ DSKTBL: DW      DSK_INIT        ;0  - Initialize Driver.
         DW      EXIT            ;11 - Flush output buffer. (Not used.)
         DW      EXIT            ;12 - IO Control.
 
-CONTBL: DW      EXIT            ;0  - Init. (Not used)
-        DW      EXIT            ;1  - Media check (Not used)
-        DW      EXIT            ;2  - Get Bios Parameter Block (Not used)
-        DW      CMDERR          ;3  - Reserved. (Currently returns error)
-        DW      CON_READ        ;4  - Character read. (Destructive)
-        DW      CON_RDND        ;5  - Character read. (Non-destructive)
-        DW      EXIT            ;6  - Return status. (Not used)
-        DW      CON_FLSH        ;7  - Flush Input buffer.
-        DW      CON_WRIT        ;8  - Character write.
-        DW      CON_WRIT        ;9  - Character write with Verify.
-        DW      CON_WRST        ;10 - Character write status.
-        DW      EXIT            ;11 - Flush output buffer. (Not used.)
-        DW      EXIT            ;12 - IO Control.
+CONTBL: DW      FEXIT            ;0  - Init. (Not used)
+        DW      FEXIT            ;1  - Media check (Not used)
+        DW      FEXIT            ;2  - Get Bios Parameter Block (Not used)
+        DW      FCMDERR          ;3  - Reserved. (Currently returns error)
+        DW      FCON_READ        ;4  - Character read. (Destructive)
+        DW      FCON_RDND        ;5  - Character read. (Non-destructive)
+        DW      FEXIT            ;6  - Return status. (Not used)
+        DW      FCON_FLSH        ;7  - Flush Input buffer.
+        DW      FCON_WRIT        ;8  - Character write.
+        DW      FCON_WRIT        ;9  - Character write with Verify.
+        DW      FCON_WRST        ;10 - Character write status.
+        DW      FEXIT            ;11 - Flush output buffer. (Not used.)
+        DW      FEXIT            ;12 - IO Control.
 
 AUXTBL: DW      EXIT            ;0  - Init. (Not used)
         DW      EXIT            ;1  - Media check (Not used)
@@ -256,15 +256,6 @@ RE_INIT LABEL FAR
         RET
 
 STRATP  ENDP
-
-;
-; Console interrupt routine for processing I/O packets.
-;
-
-CON_INT:
-        PUSH    SI
-        MOV     SI,OFFSET CONTBL
-        JMP     SHORT ENTRY
 
 ;
 ; Auxilary interrupt routine for processing I/O packets.
@@ -388,6 +379,54 @@ EXIT1:  LDS     BX,CS:[PTRSAV]
         RET                             ;RESTORE REGS AND RETURN
 EXITP   ENDP
 
+;
+; Console interrupt routine for processing I/O packets.
+;
+
+CON_INT:
+        PUSH    BX
+        MOV     BX,OFFSET CONTBL
+
+;;; Fast version of ENTRY for character devices.
+;;; Most registers used in ENTRY are for block devices.
+;;; Fast version skips saving/setting such registers.
+
+FENTRY:
+	PUSH	AX
+	PUSH	SI
+	PUSH	DS
+	PUSH	ES
+	MOV	AX,CS
+	MOV	DS,AX
+	LES	SI,[PTRSAV]
+	MOV	AL,ES:[SI.CMD]
+	CMP	AL,12
+	JA	FCMDERR
+	CBW
+	ADD	AX,AX
+	ADD	BX,AX
+	JMP	[BX]
+FEXIT:
+	MOV	AH,1		; Done
+FEXIT1:
+	MOV	ES:[SI.STATUS],AX
+	POP	ES
+	POP	DS
+	POP	SI
+	POP	AX
+	POP	BX
+FEXITR	PROC	FAR
+	RET
+FEXITR	ENDP
+FBUS_EXIT:
+	MOV	AH,3		; Busy + done
+	JMP	FEXIT1
+FCMDERR:
+	MOV	AL,3
+FERR_EXIT:
+	MOV	AH,81H		; Error + done
+	JMP	FEXIT1
+
         PAGE
         SUBTTL  Main console I/O section.
 
@@ -498,59 +537,67 @@ CINP:   CALL    CISTAT          ;Check for character ready in queue.
 ; Console read non-destructive.
 ;
 
-CON_RDND:
+FCON_RDND:
         CALL    CISTAT          ;See if character ready.
         JZ      CON_RDN2        ;No, return busy signal.
 CON_RDN1:
-        LDS     BX,CS:[PTRSAV]
-        MOV     [BX.MEDIA],AL
-        JMP     EXIT
+	MOV	ES:[SI.MEDIA],AL
+        JMP     FEXIT
 CON_RDN2:
-        JMP     BUS_EXIT
+        JMP     FBUS_EXIT
 
 ;
 ; Console destructive read.
 ;
 
+FCON_READ:
+	PUSH	CX
+	PUSH	DI
+	MOV	CX,ES:[SI.COUNT]
+	LES	DI,ES:[SI.TRANS]
 CON_READ:
         CALL    CINP            ;Get character.
         STOSB                   ;Save it in users buffer.
         LOOP    CON_READ        ;Loop until CX is exhausted.
-        JMP     EXIT
+	MOV	ES,WORD PTR [PTRSAV+2]
+	POP	DI
+	POP	CX
+        JMP     FEXIT
 
 ;
 ; Console flush routine. (ctrl-c, ctrl-f, or ctrl-s inspired)
 ;
 
-CON_FLSH:
+FCON_FLSH:
 	MOV	BYTE PTR [CON_BUF],0
-        JMP     EXIT
+        JMP     FEXIT
 
 ;
 ; Console output status routine.
 ;
 
-CON_WRST:
-        JMP     EXIT            ;Yes, normal exit.
+FCON_WRST:
+        JMP     FEXIT            ;Yes, normal exit.
 
 ;
 ; Console output routine.
 ;
 
-CON_WRIT:
-        MOV     SI,DI           ;Get destination to source.
+FCON_WRIT:
+	MOV	BX,ES:[SI.COUNT]
+	LES	SI,ES:[SI.TRANS]
 CON_WRI1:
         LODS    BYTE PTR ES:[SI]
-        PUSH    CX
 IF      ANSI
         CALL    CONOUT          ;Call ansi driver.
         ENDIF
 IFE     ANSI
         CALL    OUTCHR
         ENDIF
-        POP     CX
-        LOOP    CON_WRI1        ;Keep going until user buffer through.
-        JMP     EXIT
+	DEC	BX
+	JNE	CON_WRI1
+	LES	SI,[PTRSAV]
+        JMP     FEXIT
 
 ;
 ; Console character output routine.
