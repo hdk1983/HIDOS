@@ -178,19 +178,19 @@ CONTBL: DW      FEXIT            ;0  - Init. (Not used)
         DW      FEXIT            ;11 - Flush output buffer. (Not used.)
         DW      FEXIT            ;12 - IO Control.
 
-AUXTBL: DW      EXIT            ;0  - Init. (Not used)
-        DW      EXIT            ;1  - Media check (Not used)
-        DW      EXIT            ;2  - Get Bios Parameter Block (Not used)
-        DW      CMDERR          ;3  - Reserved. (Returns an error)
-        DW      AUX_READ        ;4  - Character read. (Destructive)
-        DW      AUX_RDND        ;5  - Character read. (Non-destructive)
-        DW      EXIT            ;6  - Return status. (Not used)
-        DW      AUX_CLR         ;7  - Flush Input buffer.
-        DW      AUX_WRIT        ;8  - Character write.
-        DW      AUX_WRIT        ;9  - Character write with verify.
-        DW      AUX_WRST        ;10 - Character write status.
-        DW      EXIT            ;11 - Flush output buffer. (Not used.)
-        DW      EXIT            ;12 - IO Control.
+AUXTBL: DW      FEXIT            ;0  - Init. (Not used)
+        DW      FEXIT            ;1  - Media check (Not used)
+        DW      FEXIT            ;2  - Get Bios Parameter Block (Not used)
+        DW      FCMDERR          ;3  - Reserved. (Returns an error)
+        DW      FAUX_READ        ;4  - Character read. (Destructive)
+        DW      FAUX_RDND        ;5  - Character read. (Non-destructive)
+        DW      FEXIT            ;6  - Return status. (Not used)
+        DW      FAUX_CLR         ;7  - Flush Input buffer.
+        DW      FAUX_WRIT        ;8  - Character write.
+        DW      FAUX_WRIT        ;9  - Character write with verify.
+        DW      FAUX_WRST        ;10 - Character write status.
+        DW      FEXIT            ;11 - Flush output buffer. (Not used.)
+        DW      FEXIT            ;12 - IO Control.
 
 TIMTBL: DW      EXIT            ;0  - Init. (Not used)
         DW      EXIT            ;1  - Media check (Not used)
@@ -262,9 +262,9 @@ STRATP  ENDP
 ;
 
 AUX_INT:
-        PUSH    SI
-        MOV     SI,OFFSET AUXTBL
-        JMP     SHORT ENTRY
+        PUSH    BX
+        MOV     BX,OFFSET AUXTBL
+        JMP     SHORT FENTRY
 
 ;
 ; Printer interrupt routine for processing I/O packets.
@@ -885,28 +885,32 @@ PRN_WR1:LODS    BYTE PTR ES:[SI];Get a data byte.
         PAGE
         SUBTTL  Auxilary I/O routines.
 
-AUXCHAR DB      0               ;Temporary AUX ahead storage.
+AUX_BUF	DW	0
 
 ;
 ; Status routine for Auxilary port.
 ;
 
-AISTAT: MOV     AL,[AUXCHAR]
-        TEST    AL,AL
+AISTAT: MOV     AX,[AUX_BUF]
+        TEST    AH,AH
         JNZ     AISTA9          ;Character already waiting.
+	PUSH	DX
 	MOV	AX,300H
-	XOR	DX,DX
+	CWD
 	INT	14H
-	MOV	AL,AH
-	AND	AL,1
-        JZ      AISTA9          ;Still none waiting.
+	TEST	AH,1
+        JZ      AISTA8          ;Still none waiting.
 	MOV	AX,200H
-	XOR	DX,DX
+	CWD
 	INT	14H
-	TEST	AX,AX
-	JNS	AISTA9
+	XOR	AH,80H
+	JS	AISTA1
 	XOR	AX,AX
-AISTA9: MOV     [AUXCHAR],AL
+AISTA1:
+	MOV	[AUX_BUF],AX
+AISTA8:
+	POP	DX
+AISTA9:
         RET
 
 ;
@@ -915,7 +919,7 @@ AISTA9: MOV     [AUXCHAR],AL
 
 AIN:    CALL    AISTAT          ;Get status and/or char.
         JZ      AIN             ;Cycle until one is ready.
-        MOV     [AUXCHAR],0
+	MOV	BYTE PTR [AUX_BUF+1],0
         RET
 
 ;
@@ -924,7 +928,7 @@ AIN:    CALL    AISTAT          ;Get status and/or char.
 
 AOUT:
 	MOV	AH,1
-	XOR	DX,DX
+	CWD
 	INT	14H
         RET
 
@@ -932,49 +936,62 @@ AOUT:
 ; Non-Destructive Auxilary read routine.
 ;
 
-AUX_RDND:
+FAUX_RDND:
         CALL    AISTAT          ;Get status and copy of char. waiting if any.
         JZ      AUX_RDN2        ;No character waiting, exit.
         JMP     CON_RDN1
 AUX_RDN2:
-        JMP     BUS_EXIT
+        JMP     FBUS_EXIT
 
 ;
 ; Destructive Auxilary read routine.
 ;
 
+FAUX_READ:
+	PUSH	CX
+	PUSH	DI
+	MOV	CX,ES:[SI.COUNT]
+	LES	DI,ES:[SI.TRANS]
 AUX_READ:
         CALL    AIN             ;Get data character.
         STOSB                   ;Save it through DI.
         LOOP    AUX_READ        ;Cycle until user buffer full.
-        JMP     EXIT
+	MOV	ES,WORD PTR [PTRSAV+2]
+	POP	DI
+	POP	CX
+        JMP     FEXIT
 
 ;
 ; Auxilary clear type a head.
 ;
 
-AUX_CLR:
-        MOV     [AUXCHAR],0
-        JMP     EXIT
+FAUX_CLR:
+	MOV	BYTE PTR [AUX_BUF+1],0
+        JMP     FEXIT
 
 ;
 ; Auxilary write port status.
 ;
 
-AUX_WRST:
-        JMP     EXIT
+FAUX_WRST:
+        JMP     FEXIT
 
 ;
 ; Auxilary write.
 ;
 
-AUX_WRIT:
-        MOV     SI,DI
+FAUX_WRIT:
+	PUSH	DX
+	MOV	BX,ES:[SI.COUNT]
+	LES	SI,ES:[SI.TRANS]
 AUX_WRI1:
         LODS    BYTE PTR ES:[SI]        ;Get char. from users buffer.
         CALL    AOUT            ;Send it to device.
-        LOOP    AUX_WRI1        ;Cycle until all done.
-        JMP     EXIT
+	DEC	BX
+	JNE	AUX_WRI1
+	LES	SI,[PTRSAV]
+	POP	DX
+        JMP     FEXIT
 
         PAGE
         SUBTTL  Date/Time Routines.
