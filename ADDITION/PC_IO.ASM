@@ -206,19 +206,19 @@ TIMTBL: DW      EXIT            ;0  - Init. (Not used)
         DW      EXIT            ;11 - Flush output buffer. (Not used)
         DW      EXIT            ;12 - IO Control.
 
-PRNTBL: DW      EXIT            ;0  - (Not used)
-        DW      EXIT            ;1  - (Not used)
-        DW      EXIT            ;2  - Block (Not used)
-        DW      CMDERR          ;3  - Reserved. (currently returns error)
-        DW      EXIT            ;4  - (Not used)
-        DW      BUS_EXIT        ;5  - (Not used, returns busy flag.)
-        DW      EXIT            ;6  - (Not used)
-        DW      EXIT            ;7  - (Not used)
-        DW      PRN_WRT         ;8  - Character write.
-        DW      PRN_WRT         ;9  - Character write with verify.
-        DW      PRN_STA         ;10 - Character write status.
-        DW      EXIT            ;11 - (Not used.)
-        DW      EXIT            ;12 - IO Control.
+PRNTBL: DW      FEXIT            ;0  - (Not used)
+        DW      FEXIT            ;1  - (Not used)
+        DW      FEXIT            ;2  - Block (Not used)
+        DW      FCMDERR          ;3  - Reserved. (currently returns error)
+        DW      FEXIT            ;4  - (Not used)
+        DW      FBUS_EXIT        ;5  - (Not used, returns busy flag.)
+        DW      FEXIT            ;6  - (Not used)
+        DW      FEXIT            ;7  - (Not used)
+        DW      FPRN_WRT         ;8  - Character write.
+        DW      FPRN_WRT         ;9  - Character write with verify.
+        DW      FPRN_STA         ;10 - Character write status.
+        DW      FEXIT            ;11 - (Not used.)
+        DW      FEXIT            ;12 - IO Control.
 
         PAGE
         SUBTTL  Strategy and Software Interrupt routines.
@@ -271,9 +271,9 @@ AUX_INT:
 ;
 
 PRN_INT:
-        PUSH    SI
-        MOV     SI,OFFSET PRNTBL
-        JMP     SHORT ENTRY
+        PUSH    BX
+        MOV     BX,OFFSET PRNTBL
+        JMP     SHORT FENTRY
 
 ;
 ; Clock interrupt routine for processing I/O packets.
@@ -864,23 +864,27 @@ PRCP:   MOV     BL,'k'          ;Restore last cursor save.
 ; Printer status routine.
 ;
 
-PRN_STA:
-        JMP     EXIT
+FPRN_STA:
+        JMP     FEXIT
 
 ;
 ; Printer write routine.
 ;
 
-PRN_WRT:MOV     SI,DI           ;Set source = destination index.
-
+FPRN_WRT:
+	PUSH	CX
+	PUSH	DX
+	MOV	CX,ES:[SI.COUNT]
+	LES	SI,ES:[SI.TRANS]
 PRN_WR1:LODS    BYTE PTR ES:[SI];Get a data byte.
-        PUSH    CX
 	MOV	AH,0
-	XOR	DX,DX
+	CWD
 	INT	17H
-        POP     CX
         LOOP    PRN_WR1
-        RET
+	LES	SI,[PTRSAV]
+	POP	DX
+	POP	CX
+	JMP	FEXIT
 
         PAGE
         SUBTTL  Auxilary I/O routines.
