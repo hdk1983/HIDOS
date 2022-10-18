@@ -45,20 +45,10 @@ INCLUDE DOSSYM.ASM
 
 	INCLUDE	STRIN.ASM
 
-entry	BUFOUT
-; called by STRIN.ASM and CTRLC.ASM with following comments:
-; - "Print control chars nicely" (STRIN.ASM)
-; - "Display "^C"" (CTRLC.ASM)
-	;; Looks like same algorithm as v1.25/source/MSDOS.ASM
-	CMP	AL,' '
-	JNB	OUT
-	CMP	AL,c_HT
-	JE	OUT
-	PUSH	AX
-	MOV	AL,'^'
-	CALL	OUT
-	POP	AX
-	ADD	AL,'@'
+;;; Many applications use system call 2 a lot.
+;;; Fast path for system call 2.
+entry	$STD_CON_OUTPUT		; System call 2
+	MOV	AL,DL
 	; Fall through
 entry	OUT
 ; called by STRIN.ASM, DISK.ASM and MISC.ASM.
@@ -70,6 +60,7 @@ entry	OUT
 	;; Reference: v1.25/source/MSDOS.ASM
 	CMP	AL,' '
 	JB	CTRLOUT
+OUT_CHAR2:
 	CMP	AL,7FH
 	JE	OUTCH
 OUT_CHAR:
@@ -99,25 +90,6 @@ OUTRET:
 	POP	SI
 	POP	DS
 	RET
-OUTPRN:
-	PUSH	BX
-	PUSH	AX
-	MOV	BX,4
-        invoke  GET_IO_FCB
-	POP	AX
-	JC	OUTPRNERR
-OUTPRNLOOP:
-	MOV	AH,3
-        invoke  IOFUNC
-	JNZ	OUTPRNOK
-        invoke  SPOOLINT
-	JMP	OUTPRNLOOP
-OUTPRNOK:
-	MOV	AH,2
-        invoke  IOFUNC
-OUTPRNERR:
-	POP	BX
-	JMP	OUTRET
 CTRLOUT:
 	CMP	AL,c_CR
 	JE	ZERPOS
@@ -137,6 +109,41 @@ ZERPOS:
 BACKPOS:
 	DEC	[CARPOS]
 	JMP	OUTCH
+entry	BUFOUT
+; called by STRIN.ASM and CTRLC.ASM with following comments:
+; - "Print control chars nicely" (STRIN.ASM)
+; - "Display "^C"" (CTRLC.ASM)
+	;; Looks like same algorithm as v1.25/source/MSDOS.ASM
+	;; Jump to internal labels for performance.
+	CMP	AL,' '
+	JNB	OUT_CHAR2
+	CMP	AL,c_HT
+	JE	TABLP
+	PUSH	AX
+	MOV	AL,'^'
+	CALL	OUT_CHAR
+	POP	AX
+	ADD	AL,'@'
+	JMP	OUT_CHAR
+OUTPRN:
+	PUSH	BX
+	PUSH	AX
+	MOV	BX,4
+        invoke  GET_IO_FCB
+	POP	AX
+	JC	OUTPRNERR
+OUTPRNLOOP:
+	MOV	AH,3
+        invoke  IOFUNC
+	JNZ	OUTPRNOK
+        invoke  SPOOLINT
+	JMP	OUTPRNLOOP
+OUTPRNOK:
+	MOV	AH,2
+        invoke  IOFUNC
+OUTPRNERR:
+	POP	BX
+	JMP	OUTRET
 
 entry	TAB
 ; called by PUTNEW in STRIN.ASM.
@@ -202,33 +209,24 @@ IO_COMMON_LOOP:
 	return
 $STD_CON_INPUT ENDP
 
-        procedure   $STD_CON_OUTPUT,NEAR   ; System call 2
-	MOV	AL,DL
-	CALL	OUT
-	return
-$STD_CON_OUTPUT ENDP
-
         procedure   $STD_AUX_INPUT,NEAR   ; System call 3
 	MOV	BX,3
 	XOR	AX,AX
-	CALL	IO_COMMON
-	return
+	JMP	IO_COMMON
 $STD_AUX_INPUT ENDP
 
         procedure   $STD_AUX_OUTPUT,NEAR   ; System call 4
 	MOV	BX,3
 	MOV	AH,2
 	MOV	AL,DL
-	CALL	IO_COMMON
-	return
+	JMP	IO_COMMON
 $STD_AUX_OUTPUT ENDP
 
         procedure   $STD_PRINTER_OUTPUT,NEAR   ; System call 5
 	MOV	BX,4
 	MOV	AH,2
 	MOV	AL,DL
-	CALL	IO_COMMON
-	return
+	JMP	IO_COMMON
 $STD_PRINTER_OUTPUT ENDP
 
 ;;; BX must be saved for internal calls from STRIN.ASM.
@@ -242,16 +240,14 @@ $STD_PRINTER_OUTPUT ENDP
 $STD_CON_INPUT_NO_ECHO ENDP
 
         procedure   $STD_CON_STRING_OUTPUT,NEAR   ; System call 9
+	;; The dispatcher (MSCODE.ASM) clears direction flag.
 	MOV	SI,DX
 STROUT_LOOP:
-	CLD
 	LODSB
 	CMP	AL,'$'
-	JE	STROUT_END
+	retz
 	CALL	OUT
 	JMP	STROUT_LOOP
-STROUT_END:
-	return
 $STD_CON_STRING_OUTPUT ENDP
 
         procedure   $STD_CON_INPUT_STATUS,NEAR   ; System call 11
@@ -259,13 +255,12 @@ $STD_CON_STRING_OUTPUT ENDP
 	XOR	BX,BX
         invoke  GET_IO_FCB
 	MOV	AL,0
-	JC	INSTAT_NO
+	retc
 	MOV	AH,1
         invoke  IOFUNC
 	MOV	AL,0
-	JZ	INSTAT_NO
+	retz
 	MOV	AL,0FFH
-INSTAT_NO:
 	return
 $STD_CON_INPUT_STATUS ENDP
 
@@ -291,7 +286,6 @@ ENDM
 	TransferIf 7,$RAW_CON_INPUT
 	TransferIf 8,$STD_CON_INPUT_NO_ECHO
 	TransferIf 10,$STD_CON_STRING_INPUT
-	CLC
 	return
 FLUSH_RET:
 	POP	DS
