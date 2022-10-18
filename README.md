@@ -164,6 +164,8 @@ The behavior looks similar to PC DOS, as follows:
 - Cooked mode CON output acts like AH=02H or AH=09H.
 - Raw mode CON output acts like AH=06H.
 
+### IO.SYS
+
 Unlike other DOS, if only one floppy drive is found, B: does not exist.
 
 ### COMMAND.COM
