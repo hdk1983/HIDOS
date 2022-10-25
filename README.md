@@ -34,6 +34,7 @@ The build process generates the following IO.SYS binaries:
 - `PC_IO.EXE`
 - `VM_IO.SYS`
 - `DOS_IO.EXE`
+- `98_IO.EXE`
 
 `SKELIO.SYS` is skeltal BIOS for the ALTOS ACS-86C.
 Not tested.
@@ -58,6 +59,13 @@ It can use disk image files for drives.
 `MSDOS.SYS` is loaded on the host too.
 At least one FAT12 file system image or disk which contains `COMMAND.COM` is needed.
 It works on 32-bit Windows command prompt, MS-DOS, DOSBox and FreeDOS.
+
+`98_IO.EXE` is BIOS for PC-98.
+It can be booted by `98_BOOT.BIN` boot code only since it is relocatable binary including MZ header.
+Keyboard input routine converts function keys like `PC_IO.EXE`, but no applications use PC DOS like input -- 1st byte is NUL and 2nd byte is PC-98 key code.
+This BIOS does not provide KEY.TBL feature or INT DCH interface.
+Therefore, PC-98 DOS applications using INT DCH interface or other services provided by PC-98 MS-DOS do not work on this BIOS.
+1440KiB, 720KiB, 360KiB and 1232KiB floopy disk support is implemented but not tested.
 
 ## Boot on PC
 
@@ -92,6 +100,10 @@ Then rename `PC_IO.EXE` to `IO.SYS` and copy `IO.SYS`, `MSDOS.SYS`, and `COMMAND
 
 The boot code is probably not compatible with other DOS.
 It loads `IO.SYS` only, then `IO.SYS` loads `MSDOS.SYS`.
+
+## Boot on PC-98
+
+Same as PC except using `98_IO.EXE` instead of `PC_IO.EXE` for `IO.SYS`.
 
 ## Boot on a HIDOS virtual machine
 
