@@ -43,7 +43,7 @@ Not tested.
 It is expected to work on PCjr compatible and JX too.
 It can be booted by `PC_BOOT.BIN` boot code only since it is relocatable binary including MZ header.
 Since JX Japanese BIOS uses some additional memory space, the address for IO.SYS drivers is fixed during boot process.
-Keyboard input routine converts function keys ans arrow keys to 2-byte escape sequences handled by DOSMES.ASM which says them as "VT52 equivalences" by default.
+Keyboard input routine converts function keys and arrow keys to 2-byte escape sequences handled by DOSMES.ASM which says them as "VT52 equivalences" by default.
 Maybe applications expect PC DOS compatible input -- 1st byte is NUL and 2nd byte is PC key code.
 The BIOS also supports the PC DOS compatible mode.
 Typing ESC F10 toggles the mode.
@@ -188,3 +188,8 @@ IBM version seems calling ROM BIOS directly from COMMAND.COM.
 
 `DIR /P` command pauses per 23 lines, defined as LINPERPAG in COMEQU.ASM.
 It is not good if the screen has less than 24 lines, like JX Japanese kihon-mode.
+
+### CHKDSK.COM
+
+`CHKDSK` command shows warning message "Probable non-DOS disk." for 1440KiB disks.
+This is because the command expects FAT ID >= F8H but 1440KiB disks have FAT ID F0H.
