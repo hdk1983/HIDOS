@@ -494,6 +494,7 @@ io_clock (unsigned addr, unsigned idx, unsigned cmd)
       tv_base.tv_sec -= tv.tv_sec;
       while (tv_base.tv_usec < tv.tv_usec)
 	tv_base.tv_usec += 1000000, tv_base.tv_sec--;
+      tv_base.tv_usec -= tv.tv_usec;
       break;
     default:
       return -1;
