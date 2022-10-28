@@ -354,7 +354,7 @@ doser2:	mov	%ax,gr_ax
 	cmp	$0,%al
 	jne	2f
 	movzbl	swtchr,%eax
-	mov	%al,gr_dx
+	mov	%al,gr_dl
 	ret
 2:	cmp	$1,%al
 	jne	2f
@@ -364,7 +364,7 @@ doser2:	mov	%ax,gr_ax
 2:	cmp	$2,%al
 	jne	2f
 	movzbl	devavl,%eax
-	mov	%al,gr_dx
+	mov	%al,gr_dl
 	ret
 2:	cmp	$3,%al
 	jne	2f
@@ -466,7 +466,7 @@ bad:
 .endm
 .macro	i04like	a
 	call	imm1
-	\a	%al,gr_ax
+	\a	%al,gr_al
 	jmp	mnext
 .endm
 .macro	i05like	a
@@ -1001,7 +1001,7 @@ id3:	call	modrm
 	jmp	*tbl2w(,%edx,4)
 id4:	call	imm1
 	mov	%eax,%edx
-	movzbl	gr_ax,%eax
+	movzbl	gr_al,%eax
 	div	%dl
 	xchg	%ah,%al
 	mov	%ax,gr_ax
