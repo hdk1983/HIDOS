@@ -1001,7 +1001,7 @@ id3:	call	modrm
 	jmp	*tbl2w(,%edx,4)
 id4:	call	imm1
 	mov	%eax,%edx
-	movzwl	gr_ax,%eax
+	movzbl	gr_ax,%eax
 	div	%dl
 	xchg	%ah,%al
 	mov	%ax,gr_ax
